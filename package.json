@@ -1,0 +1,9 @@
+{
+  "name": "pedidos-app",
+  "private": true,
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "install:all": "npm install && cd frontend && npm install"
+  }
+}
