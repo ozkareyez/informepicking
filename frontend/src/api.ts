@@ -1,10 +1,7 @@
 import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client } from './types';
-import * as store from './store';
 import * as supabaseStore from './supabaseStore';
 
-const useSupabase = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY);
-
-const active = useSupabase ? supabaseStore : store;
+const active = supabaseStore;
 
 export async function getOrders(params: {
   cliente?: string;

@@ -8,7 +8,7 @@ interface Props {
   onCancel: () => void;
 }
 
-const CLEAR_PASSWORD = import.meta.env.VITE_CLEAR_PASSWORD || 'admin123';
+const CLEAR_PASSWORD = '0220';
 
 export default function PasswordModal({ title, message, onConfirm, onCancel }: Props) {
   const [password, setPassword] = useState('');
