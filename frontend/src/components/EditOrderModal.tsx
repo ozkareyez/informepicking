@@ -38,71 +38,71 @@ export default function EditOrderModal({ order, onSave, onClose }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <h2 className="text-lg font-semibold text-gray-900">Editar pedido</h2>
-          <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500">
-            <X className="w-5 h-5" />
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+      <div className="bg-white rounded-t-2xl sm:rounded-lg shadow-xl w-full sm:max-w-lg max-h-[90vh] sm:max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-900">Editar pedido</h2>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-500">
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="p-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Fecha</label>
               <input type="date" {...register('date', { required: true })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Cliente</label>
               <input type="text" {...register('cliente', { required: true })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">SKU</label>
               <input type="text" {...register('sku', { required: true })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Kg</label>
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Kg</label>
               <input type="number" step="0.01" min="0.01" {...register('kg', { required: true, min: 0.01 })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Operario</label>
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Operario</label>
               <input type="text" {...register('operator', { required: true })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Tipo</label>
               <select {...register('type', { required: true })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500">
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500">
                 <option value="Masivo">Masivo</option>
                 <option value="Venta Directa">Venta Directa</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hora inicio</label>
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Inicio</label>
               <input type="time" {...register('start_time', { required: true })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Hora final</label>
+              <label className="block text-xs font-medium text-gray-500 mb-0.5">Final</label>
               <input type="time" {...register('end_time', { required: true })}
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
 
-          <div className="mt-6 flex gap-3 justify-end">
+          <div className="mt-4 flex gap-2 justify-end">
             <button type="button" onClick={onClose}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors">
+              className="px-3 py-1.5 rounded-md text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200">
               Cancelar
             </button>
             <button type="submit" disabled={isSubmitting}
-              className="inline-flex items-center gap-2 bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50">
-              <Save className="w-4 h-4" />
-              Guardar cambios
+              className="inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-blue-700 disabled:opacity-50">
+              <Save className="w-3.5 h-3.5" />
+              Guardar
             </button>
           </div>
         </form>

@@ -7,36 +7,54 @@ import PendingOrders from './components/PendingOrders';
 import OrderTable from './components/OrderTable';
 import Statistics from './components/Statistics';
 import EditOrderModal from './components/EditOrderModal';
-import { createOrder, updateOrder, getPendingOrders } from './api';
+import DispatchView from './components/DispatchView';
+import { createOrder, assignOperator, updateOrder, getPendingOrders, getUnassignedOrders } from './api';
 import type { Order } from './types';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
+  const [unassignedCount, setUnassignedCount] = useState(0);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
 
   const triggerRefresh = useCallback(() => setRefreshTrigger(t => t + 1), []);
 
   useEffect(() => {
-    async function fetchPending() {
+    async function fetchCounts() {
       try {
-        const data = await getPendingOrders();
-        setPendingCount(data.length);
+        const [pending, unassigned] = await Promise.all([
+          getPendingOrders(),
+          getUnassignedOrders(),
+        ]);
+        setPendingCount(pending.length);
+        setUnassignedCount(unassigned.length);
       } catch {}
     }
-    fetchPending();
-    const id = setInterval(fetchPending, 15000);
+    fetchCounts();
+    const id = setInterval(fetchCounts, 15000);
     return () => clearInterval(id);
   }, [refreshTrigger]);
 
-  async function handleAssign(data: any) {
+  async function handleRegister(data: any) {
     try {
       await createOrder(data);
-      toast('Pedido asignado correctamente', 'success');
+      toast('Pedido registrado correctamente', 'success');
       triggerRefresh();
     } catch (err: any) {
-      toast(err.message || 'Error al asignar pedido', 'error');
+      toast(err.message || 'Error al registrar pedido', 'error');
+    }
+  }
+
+  async function handleAssignOperator(id: number, operator: string) {
+    try {
+      const now = new Date();
+      const start_time = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      await assignOperator(id, operator, start_time);
+      toast('Operario asignado correctamente', 'success');
+      triggerRefresh();
+    } catch (err: any) {
+      toast(err.message || 'Error al asignar operario', 'error');
     }
   }
 
@@ -65,18 +83,20 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} pendingCount={pendingCount} />
+      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} pendingCount={pendingCount} unassignedCount={unassignedCount} />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3">
         {activeTab === 'dashboard' && <Dashboard />}
 
         {activeTab === 'registro' && (
-          <OrderForm onSubmit={handleAssign} />
+          <OrderForm onSubmit={handleRegister} />
         )}
 
         {activeTab === 'pendientes' && (
-          <PendingOrders onCompleted={handleOrderCompleted} />
+          <PendingOrders onCompleted={handleOrderCompleted} onAssignOperator={handleAssignOperator} />
         )}
+
+        {activeTab === 'despacho' && <DispatchView />}
 
         {activeTab === 'pedidos' && (
           <OrderTable

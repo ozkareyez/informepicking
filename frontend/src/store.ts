@@ -1,5 +1,5 @@
-import type { Order, OrderFormData, DashboardData, StatisticsData, Client } from './types';
-import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency } from './utils';
+import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client } from './types';
+import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime } from './utils';
 
 const STORAGE_KEY = 'pedidos_orders';
 
@@ -25,8 +25,7 @@ function ensureNextId(orders: Order[]) {
 // ─── Public API ────────────────────────────────────────────────
 
 export async function getOrders(params: {
-  search?: string;
-  operator?: string;
+  cliente?: string;
   date?: string;
   type?: string;
   status?: string;
@@ -35,13 +34,9 @@ export async function getOrders(params: {
 } = {}): Promise<Order[]> {
   let orders = loadOrders();
 
-  if (params.search) {
-    const q = params.search.toLowerCase();
-    orders = orders.filter(o => o.sku.toLowerCase().includes(q));
-  }
-  if (params.operator) {
-    const q = params.operator.toLowerCase();
-    orders = orders.filter(o => o.operator.toLowerCase().includes(q));
+  if (params.cliente) {
+    const q = params.cliente.toLowerCase();
+    orders = orders.filter(o => o.cliente.toLowerCase().includes(q));
   }
   if (params.date) {
     orders = orders.filter(o => o.date === params.date);
@@ -72,6 +67,10 @@ export async function getPendingOrders(): Promise<Order[]> {
   return loadOrders().filter(o => o.status === 'pending');
 }
 
+export async function getUnassignedOrders(): Promise<Order[]> {
+  return loadOrders().filter(o => o.status === 'sin_operario');
+}
+
 export async function getClients(): Promise<Client[]> {
   const clients = new Set<string>();
   for (const o of loadOrders()) {
@@ -80,7 +79,7 @@ export async function getClients(): Promise<Client[]> {
   return Array.from(clients).sort().map(c => ({ cliente: c }));
 }
 
-export async function createOrder(data: OrderFormData): Promise<Order> {
+export async function createOrder(data: RegisterOrderData): Promise<Order> {
   const orders = loadOrders();
   ensureNextId(orders);
   const order: Order = {
@@ -89,17 +88,35 @@ export async function createOrder(data: OrderFormData): Promise<Order> {
     cliente: data.cliente,
     sku: data.sku,
     kg: data.kg,
-    operator: data.operator,
-    start_time: data.start_time,
+    operator: '',
+    start_time: '',
     end_time: null,
     type: data.type,
-    status: 'pending',
+    status: 'sin_operario',
     time_spent: null,
     kg_per_hour: null,
     efficiency: null,
+    plc: null,
+    placa: null,
+    cargue_start: null,
+    cargue_end: null,
+    cargue_time: null,
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
   };
   orders.push(order);
+  saveOrders(orders);
+  return order;
+}
+
+export async function assignOperator(id: number, operator: string, start_time: string): Promise<Order> {
+  const orders = loadOrders();
+  const idx = orders.findIndex(o => o.id === id);
+  if (idx === -1) throw new Error('Pedido no encontrado');
+  const order = orders[idx];
+  if (order.status !== 'sin_operario') throw new Error('El pedido ya tiene un operario asignado');
+  order.operator = operator;
+  order.start_time = start_time;
+  order.status = 'pending';
   saveOrders(orders);
   return order;
 }
@@ -265,9 +282,37 @@ export async function getStatistics(params: { operator?: string; period?: string
   }
 
   const bestEff = orders.reduce((max, o) => Math.max(max, o.efficiency ?? 0), 0);
-  const operators = Array.from(new Set(loadOrders().map(o => o.operator))).sort().map(o => ({ operator: o }));
+  const operators = Array.from(new Set(loadOrders().map(o => o.operator).filter(Boolean))).sort().map(o => ({ operator: o }));
 
   return { stats, bestDay, bestEfficiency: bestEff > 0 ? { best_efficiency: bestEff } : null, operators };
+}
+
+export async function getOrdersForDispatch(): Promise<Order[]> {
+  return loadOrders().filter(o => o.status === 'completed');
+}
+
+export async function dispatchOrder(id: number, data: {
+  plc: string;
+  placa: string;
+  cargue_start: string;
+  cargue_end: string;
+}): Promise<Order> {
+  const orders = loadOrders();
+  const idx = orders.findIndex(o => o.id === id);
+  if (idx === -1) throw new Error('Pedido no encontrado');
+
+  const cargue_time = calculateCargueTime(data.cargue_start, data.cargue_end);
+  orders[idx] = {
+    ...orders[idx],
+    plc: data.plc,
+    placa: data.placa,
+    cargue_start: data.cargue_start,
+    cargue_end: data.cargue_end,
+    cargue_time,
+    status: 'despachado',
+  };
+  saveOrders(orders);
+  return orders[idx];
 }
 
 export async function getAllClients(): Promise<string[]> {

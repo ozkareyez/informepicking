@@ -47,84 +47,81 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-4">
-              <div className={`${card.color} p-3 rounded-lg text-white`}>
-                <Icon className="w-5 h-5" />
+            <div key={card.label} className="bg-white rounded-lg shadow-sm border border-gray-100 p-3 flex items-center gap-3">
+              <div className={`${card.color} p-2 rounded-lg text-white shrink-0`}>
+                <Icon className="w-4 h-4" />
               </div>
-              <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">{card.label}</p>
-                <p className="text-lg font-bold text-gray-900">{card.value}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide truncate">{card.label}</p>
+                <p className="text-sm font-bold text-gray-900 truncate">{card.value}</p>
               </div>
             </div>
           );
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Kg por operario</h3>
-          <ResponsiveContainer width="100%" height={300}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
+          <h3 className="text-xs font-semibold text-gray-900 mb-2">Kg por operario</h3>
+          <ResponsiveContainer width="100%" height={180}>
             <BarChart data={data.kgByOperator}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="operator" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
+              <XAxis dataKey="operator" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} />
               <Tooltip />
               <Bar dataKey="total_kg" fill="#2563eb" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Eficiencia por operario</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
+          <h3 className="text-xs font-semibold text-gray-900 mb-2">Eficiencia por operario</h3>
+          <ResponsiveContainer width="100%" height={180}>
             <BarChart data={data.kgByOperator}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="operator" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} unit="%" />
+              <XAxis dataKey="operator" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} unit="%" />
               <Tooltip />
               <Bar dataKey="avg_efficiency" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Producción por día</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
+          <h3 className="text-xs font-semibold text-gray-900 mb-2">Producción por día</h3>
+          <ResponsiveContainer width="100%" height={180}>
             <LineChart data={data.productionByDay}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 12 }} />
+              <XAxis dataKey="date" tick={{ fontSize: 9 }} />
+              <YAxis tick={{ fontSize: 10 }} />
               <Tooltip />
-              <Line type="monotone" dataKey="total_kg" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="total_kg" stroke="#2563eb" strokeWidth={2} dot={{ r: 2 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Producción por tipo de pedido</h3>
-          <ResponsiveContainer width="100%" height={300}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
+          <h3 className="text-xs font-semibold text-gray-900 mb-2">Producción por tipo</h3>
+          <ResponsiveContainer width="100%" height={180}>
             <PieChart>
               <Pie
                 data={data.productionByType}
-                cx="50%"
-                cy="50%"
+                cx="50%" cy="50%"
                 labelLine={false}
                 label={({ type, total_kg }) => `${type}: ${total_kg} kg`}
-                outerRadius={100}
-                dataKey="total_kg"
-                nameKey="type"
+                outerRadius={65}
+                dataKey="total_kg" nameKey="type"
               >
                 {data.productionByType.map((_, index) => (
                   <Cell key={index} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip />
-              <Legend />
             </PieChart>
           </ResponsiveContainer>
         </div>

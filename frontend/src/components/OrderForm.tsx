@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import { Send, Clock } from 'lucide-react';
-import type { OrderFormData } from '../types';
-import { getToday, getCurrentTime } from '../utils';
+import { FilePlus } from 'lucide-react';
+import type { RegisterOrderData } from '../types';
+import { getToday } from '../utils';
 
 const CLIENTS_KEY = 'pedidos_known_clients';
 
@@ -24,7 +24,7 @@ function addKnownClient(name: string) {
 }
 
 interface Props {
-  onSubmit: (data: OrderFormData) => Promise<void>;
+  onSubmit: (data: RegisterOrderData) => Promise<void>;
 }
 
 export default function OrderForm({ onSubmit }: Props) {
@@ -33,19 +33,16 @@ export default function OrderForm({ onSubmit }: Props) {
   const [inputCliente, setInputCliente] = useState('');
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  const { register, handleSubmit, watch, reset, setValue, formState: { errors, isSubmitting } } = useForm<OrderFormData>({
+  const { register, handleSubmit, reset, setValue, formState: { errors, isSubmitting } } = useForm<RegisterOrderData>({
     defaultValues: {
       date: getToday(),
       cliente: '',
       sku: '',
       kg: 0,
-      operator: '',
-      start_time: '',
       type: 'Masivo',
     },
   });
 
-  // Close suggestions on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -66,17 +63,14 @@ export default function OrderForm({ onSubmit }: Props) {
     setShowSuggestions(false);
   }
 
-  async function handleFormSubmit(data: OrderFormData) {
-    const start = getCurrentTime();
+  async function handleFormSubmit(data: RegisterOrderData) {
     addKnownClient(data.cliente);
-    await onSubmit({ ...data, start_time: start });
+    await onSubmit(data);
     reset({
       date: getToday(),
       cliente: '',
       sku: '',
       kg: 0,
-      operator: '',
-      start_time: '',
       type: 'Masivo',
     });
     setInputCliente('');
@@ -84,20 +78,16 @@ export default function OrderForm({ onSubmit }: Props) {
   }
 
   return (
-    <form onSubmit={handleSubmit(handleFormSubmit)} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-6 flex items-center gap-2">
-        <Send className="w-5 h-5 text-blue-600" />
-        Asignar pedido a operario
-      </h2>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <form onSubmit={handleSubmit(handleFormSubmit)} className="bg-white rounded-xl sm:rounded-lg shadow-sm border border-gray-100 p-4 sm:p-4">
+      <h2 className="text-base sm:hidden font-semibold text-gray-900 mb-3">Registrar pedido</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-3 items-end">
         <div ref={wrapperRef} className="relative">
-          <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+          <label className="block text-sm sm:text-xs font-medium text-gray-700 sm:text-gray-500 mb-1 sm:mb-0.5">Cliente</label>
           <input
             value={inputCliente}
             onChange={e => { setInputCliente(e.target.value); setValue('cliente', e.target.value); setShowSuggestions(true); }}
             onFocus={() => setShowSuggestions(true)}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
             placeholder="Nombre del cliente"
             autoComplete="off"
           />
@@ -107,58 +97,44 @@ export default function OrderForm({ onSubmit }: Props) {
               {filteredClients.map(c => (
                 <li key={c}
                   onClick={() => selectClient(c)}
-                  className="px-3 py-2 text-sm hover:bg-blue-50 cursor-pointer text-gray-700"
+                  className="px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm hover:bg-blue-50 cursor-pointer text-gray-700"
                 >{c}</li>
               ))}
             </ul>
           )}
-          {errors.cliente && <p className="text-red-500 text-xs mt-1">{errors.cliente.message}</p>}
+          {errors.cliente && <p className="text-red-500 text-xs sm:text-[10px] mt-1 sm:mt-0.5">{errors.cliente.message}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+          <label className="block text-sm sm:text-xs font-medium text-gray-700 sm:text-gray-500 mb-1 sm:mb-0.5">SKU</label>
           <input type="text" {...register('sku', { required: 'Obligatorio' })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Ej: PROD-001" />
-          {errors.sku && <p className="text-red-500 text-xs mt-1">{errors.sku.message}</p>}
+            className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" placeholder="Ej: PROD-001" />
+          {errors.sku && <p className="text-red-500 text-xs sm:text-[10px] mt-1 sm:mt-0.5">{errors.sku.message}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Kilogramos (kg)</label>
+          <label className="block text-sm sm:text-xs font-medium text-gray-700 sm:text-gray-500 mb-1 sm:mb-0.5">Kg</label>
           <input type="number" step="0.01" min="0.01" {...register('kg', { required: 'Obligatorio', min: { value: 0.01, message: 'Debe ser > 0' } })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-          {errors.kg && <p className="text-red-500 text-xs mt-1">{errors.kg.message}</p>}
+            className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
+          {errors.kg && <p className="text-red-500 text-xs sm:text-[10px] mt-1 sm:mt-0.5">{errors.kg.message}</p>}
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Operario</label>
-          <input type="text" {...register('operator', { required: 'Obligatorio' })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Nombre del operario" />
-          {errors.operator && <p className="text-red-500 text-xs mt-1">{errors.operator.message}</p>}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de pedido</label>
+          <label className="block text-sm sm:text-xs font-medium text-gray-700 sm:text-gray-500 mb-1 sm:mb-0.5">Tipo</label>
           <select {...register('type', { required: 'Obligatorio' })}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+            className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500">
             <option value="Masivo">Masivo</option>
             <option value="Venta Directa">Venta Directa</option>
           </select>
         </div>
 
-        <div className="flex items-end">
-          <div className="w-full p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-gray-600 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-blue-600" />
-            <span>La hora de inicio se capturará <strong>automáticamente</strong> al asignar</span>
-          </div>
+        <div className="sm:mb-0">
+          <button type="submit" disabled={isSubmitting}
+            className="w-full inline-flex items-center justify-center gap-2 sm:gap-1.5 bg-blue-600 text-white px-4 py-3 sm:py-1.5 rounded-lg sm:rounded-md font-medium text-base sm:text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 min-h-[48px] sm:min-h-0">
+            <FilePlus className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
+            Registrar pedido
+          </button>
         </div>
-      </div>
-
-      <div className="mt-6">
-        <button type="submit" disabled={isSubmitting}
-          className="inline-flex items-center gap-2 bg-blue-600 text-white px-8 py-3 rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-sm">
-          <Send className="w-4 h-4" />
-          Asignar pedido
-        </button>
       </div>
     </form>
   );

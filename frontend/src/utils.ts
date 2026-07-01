@@ -41,3 +41,13 @@ export function formatNumber(n: number, decimals: number = 2): string {
 export function formatEfficiency(n: number): string {
   return `${formatNumber(n)}%`;
 }
+
+export function calculateCargueTime(start: string, end: string): string {
+  const [sh, sm] = start.split(':').map(Number);
+  const [eh, em] = end.split(':').map(Number);
+  let totalMinutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (totalMinutes < 0) totalMinutes += 24 * 60;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
+}
