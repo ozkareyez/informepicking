@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { getSupabase } from './supabase';
 import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client } from './types';
 import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime } from './utils';
 
@@ -34,7 +34,7 @@ export async function getOrders(params: {
   sortBy?: string;
   sortOrder?: string;
 } = {}): Promise<Order[]> {
-  let query = supabase.from('orders').select('*');
+  let query = getSupabase().from('orders').select('*');
 
   if (params.cliente) query = query.ilike('cliente', `%${params.cliente}%`);
   if (params.date) query = query.eq('date', params.date);
@@ -51,19 +51,19 @@ export async function getOrders(params: {
 }
 
 export async function getPendingOrders(): Promise<Order[]> {
-  const { data, error } = await supabase.from('orders').select('*').eq('status', 'pending');
+  const { data, error } = await getSupabase().from('orders').select('*').eq('status', 'pending');
   if (error) throw new Error(error.message);
   return (data || []).map(mapOrder);
 }
 
 export async function getUnassignedOrders(): Promise<Order[]> {
-  const { data, error } = await supabase.from('orders').select('*').eq('status', 'sin_operario');
+  const { data, error } = await getSupabase().from('orders').select('*').eq('status', 'sin_operario');
   if (error) throw new Error(error.message);
   return (data || []).map(mapOrder);
 }
 
 export async function getClients(): Promise<Client[]> {
-  const { data, error } = await supabase.from('orders').select('cliente');
+  const { data, error } = await getSupabase().from('orders').select('cliente');
   if (error) throw new Error(error.message);
   const set = new Set<string>();
   for (const row of data || []) {
@@ -73,7 +73,7 @@ export async function getClients(): Promise<Client[]> {
 }
 
 export async function createOrder(data: RegisterOrderData): Promise<Order> {
-  const { data: row, error } = await supabase.from('orders').insert({
+  const { data: row, error } = await getSupabase().from('orders').insert({
     date: data.date,
     cliente: data.cliente,
     sku: data.sku,
@@ -88,7 +88,7 @@ export async function createOrder(data: RegisterOrderData): Promise<Order> {
 }
 
 export async function assignOperator(id: number, operator: string, start_time: string): Promise<Order> {
-  const { data: row, error } = await supabase.from('orders').update({
+  const { data: row, error } = await getSupabase().from('orders').update({
     operator,
     start_time,
     status: 'pending',
@@ -98,14 +98,14 @@ export async function assignOperator(id: number, operator: string, start_time: s
 }
 
 export async function completeOrder(id: number, end_time: string): Promise<Order> {
-  const { data: current, error: fetchError } = await supabase.from('orders').select('*').eq('id', id).single();
+  const { data: current, error: fetchError } = await getSupabase().from('orders').select('*').eq('id', id).single();
   if (fetchError) throw new Error('Pedido no encontrado');
 
   const order = mapOrder(current);
   const hours = calculateHours(order.start_time, end_time);
   const kgph = calculateKgPerHour(order.kg, hours);
 
-  const { data: row, error } = await supabase.from('orders').update({
+  const { data: row, error } = await getSupabase().from('orders').update({
     end_time,
     time_spent: calculateTimeSpent(order.start_time, end_time),
     kg_per_hour: kgph,
@@ -120,7 +120,7 @@ export async function updateOrder(id: number, data: OrderFormData & { end_time: 
   const hours = calculateHours(data.start_time, data.end_time);
   const kgph = calculateKgPerHour(data.kg, hours);
 
-  const { data: row, error } = await supabase.from('orders').update({
+  const { data: row, error } = await getSupabase().from('orders').update({
     date: data.date,
     cliente: data.cliente,
     sku: data.sku,
@@ -139,12 +139,12 @@ export async function updateOrder(id: number, data: OrderFormData & { end_time: 
 }
 
 export async function deleteOrder(id: number): Promise<void> {
-  const { error } = await supabase.from('orders').delete().eq('id', id);
+  const { error } = await getSupabase().from('orders').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }
 
 export async function getDashboard(): Promise<DashboardData> {
-  const { data, error } = await supabase.from('orders').select('*').eq('status', 'completed');
+  const { data, error } = await getSupabase().from('orders').select('*').eq('status', 'completed');
   if (error) throw new Error(error.message);
   const completed = (data || []).map(mapOrder);
 
@@ -195,7 +195,7 @@ export async function getDashboard(): Promise<DashboardData> {
 }
 
 export async function getStatistics(params: { operator?: string; period?: string; date?: string } = {}): Promise<StatisticsData> {
-  let query = supabase.from('orders').select('*').eq('status', 'completed');
+  let query = getSupabase().from('orders').select('*').eq('status', 'completed');
 
   if (params.operator) query = query.eq('operator', params.operator);
   if (params.period && params.date) {
@@ -245,14 +245,14 @@ export async function getStatistics(params: { operator?: string; period?: string
 
   const bestEff = orders.reduce((max, o) => Math.max(max, o.efficiency ?? 0), 0);
 
-  const { data: allOps } = await supabase.from('orders').select('operator').neq('operator', '');
+  const { data: allOps } = await getSupabase().from('orders').select('operator').neq('operator', '');
   const operators = Array.from(new Set((allOps || []).map((r: any) => r.operator).filter(Boolean))).sort().map(o => ({ operator: o }));
 
   return { stats, bestDay, bestEfficiency: bestEff > 0 ? { best_efficiency: bestEff } : null, operators };
 }
 
 export async function getOrdersForDispatch(): Promise<Order[]> {
-  const { data, error } = await supabase.from('orders').select('*').eq('status', 'completed');
+  const { data, error } = await getSupabase().from('orders').select('*').eq('status', 'completed');
   if (error) throw new Error(error.message);
   return (data || []).map(mapOrder);
 }
@@ -264,7 +264,7 @@ export async function dispatchOrder(id: number, data: {
   cargue_end: string;
 }): Promise<Order> {
   const cargue_time = calculateCargueTime(data.cargue_start, data.cargue_end);
-  const { data: row, error } = await supabase.from('orders').update({
+  const { data: row, error } = await getSupabase().from('orders').update({
     plc: data.plc,
     placa: data.placa,
     cargue_start: data.cargue_start,
@@ -277,6 +277,6 @@ export async function dispatchOrder(id: number, data: {
 }
 
 export async function clearAllData(): Promise<void> {
-  const { error } = await supabase.from('orders').delete().neq('id', 0);
+  const { error } = await getSupabase().from('orders').delete().neq('id', 0);
   if (error) throw new Error(error.message);
 }

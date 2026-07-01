@@ -1,14 +1,21 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+let client: SupabaseClient | null = null;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    '⚠️  Supabase no configurado. Crea un archivo .env en frontend/ con:\n' +
-    'VITE_SUPABASE_URL=https://tu-proyecto.supabase.co\n' +
-    'VITE_SUPABASE_ANON_KEY=tu-anon-key'
-  );
+export function getSupabase(): SupabaseClient {
+  if (client) return client;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    throw new Error(
+      'Supabase no configurado. Crea un archivo .env en frontend/ con:\n' +
+      'VITE_SUPABASE_URL=https://tu-proyecto.supabase.co\n' +
+      'VITE_SUPABASE_ANON_KEY=tu-anon-key'
+    );
+  }
+
+  client = createClient(supabaseUrl, supabaseAnonKey);
+  return client;
 }
-
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '');
