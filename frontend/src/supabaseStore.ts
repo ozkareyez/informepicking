@@ -462,6 +462,17 @@ export async function deleteUnloading(id: number): Promise<void> {
 
 // ─── Operadores ──────────────────────────────────────────────────
 
+export async function updateOperator(id: number, newName: string): Promise<void> {
+  const { data: op, error: fetchError } = await getSupabase().from('operators').select('name').eq('id', id).single();
+  if (fetchError) throw new Error(fetchError.message);
+  const oldName = op.name;
+  if (oldName === newName) return;
+  const { error: updateError } = await getSupabase().from('operators').update({ name: newName }).eq('id', id);
+  if (updateError) throw new Error(updateError.message);
+  const { error: orderError } = await getSupabase().from('orders').update({ operator: newName }).eq('operator', oldName);
+  if (orderError) throw new Error(orderError.message);
+}
+
 export async function getOperators(): Promise<Operator[]> {
   const { data, error } = await getSupabase().from('operators').select('*').order('name', { ascending: true });
   if (error) throw new Error(error.message);

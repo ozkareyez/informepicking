@@ -115,6 +115,10 @@ export async function createOperator(name: string): Promise<Operator> {
   return active.createOperator(name);
 }
 
+export async function updateOperator(id: number, name: string): Promise<void> {
+  return active.updateOperator(id, name);
+}
+
 export async function deleteOperator(id: number): Promise<void> {
   return active.deleteOperator(id);
 }
