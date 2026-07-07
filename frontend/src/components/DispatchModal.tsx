@@ -100,7 +100,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose }: Pro
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 sm:p-4 space-y-4 sm:space-y-3">
+        <form onSubmit={handleSubmit} noValidate className="p-5 sm:p-4 space-y-4 sm:space-y-3">
           {/* Order info */}
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-1">
             <div className="flex items-center gap-1.5 text-sm font-medium text-blue-900">
@@ -112,6 +112,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose }: Pro
               <span>Total: <strong>{order.kg} kg</strong></span>
               <span>Despachado: <strong>{order.despachado_kg} kg</strong></span>
               <span className="text-amber-700 font-semibold">Saldo: <strong>{saldo} kg</strong></span>
+              <span className="col-span-2">Operario: <strong>{order.operator}</strong></span>
             </div>
           </div>
 
