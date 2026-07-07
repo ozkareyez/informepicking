@@ -1,7 +1,9 @@
-import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client } from './types';
+import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator } from './types';
 import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime } from './utils';
 
 const STORAGE_KEY = 'pedidos_orders';
+const DESPACHOS_KEY = 'pedidos_despachos';
+const UNLOADINGS_KEY = 'pedidos_unloadings';
 
 function loadOrders(): Order[] {
   try {
@@ -20,6 +22,76 @@ let nextId = 1;
 function ensureNextId(orders: Order[]) {
   const max = orders.reduce((m, o) => Math.max(m, o.id), 0);
   if (max >= nextId) nextId = max + 1;
+}
+
+let nextDespachoId = 1;
+let nextUnloadingId = 1;
+
+function loadDespachos(): Despacho[] {
+  try { return JSON.parse(localStorage.getItem(DESPACHOS_KEY) || '[]'); } catch { return []; }
+}
+function saveDespachos(despachos: Despacho[]) { localStorage.setItem(DESPACHOS_KEY, JSON.stringify(despachos)); }
+
+function ensureDespachoIds(despachos: Despacho[]) {
+  const max = despachos.reduce((m, d) => Math.max(m, d.id), 0);
+  if (max >= nextDespachoId) nextDespachoId = max + 1;
+}
+
+function loadUnloadings(): Unloading[] {
+  try { return JSON.parse(localStorage.getItem(UNLOADINGS_KEY) || '[]'); } catch { return []; }
+}
+function saveUnloadings(unloadings: Unloading[]) { localStorage.setItem(UNLOADINGS_KEY, JSON.stringify(unloadings)); }
+
+function ensureUnloadingIds(unloadings: Unloading[]) {
+  const max = unloadings.reduce((m, u) => Math.max(m, u.id), 0);
+  if (max >= nextUnloadingId) nextUnloadingId = max + 1;
+}
+
+// ─── Despachos ────────────────────────────────────────────────
+
+export async function getDespachos(orderId: number): Promise<Despacho[]> {
+  return loadDespachos().filter(d => d.order_id === orderId).sort((a, b) => a.id - b.id);
+}
+
+export async function createDespacho(orderId: number, data: {
+  placa: string;
+  plc: string;
+  kg: number;
+  cargue_start: string;
+  cargue_end: string;
+  ruta?: string;
+}): Promise<Despacho> {
+  const cargue_time = calculateCargueTime(data.cargue_start, data.cargue_end);
+
+  const despachos = loadDespachos();
+  ensureDespachoIds(despachos);
+  const despacho: Despacho = {
+    id: nextDespachoId++,
+    order_id: orderId,
+    ruta: data.ruta ?? '',
+    placa: data.placa,
+    plc: data.plc,
+    kg: data.kg,
+    cargue_start: data.cargue_start,
+    cargue_end: data.cargue_end,
+    cargue_time,
+    created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+  };
+  despachos.push(despacho);
+  saveDespachos(despachos);
+
+  const orders = loadOrders();
+  const idx = orders.findIndex(o => o.id === orderId);
+  if (idx !== -1) {
+    const order = orders[idx];
+    order.despachado_kg += data.kg;
+    if (order.despachado_kg >= order.kg) {
+      order.status = 'despachado';
+    }
+    saveOrders(orders);
+  }
+
+  return despacho;
 }
 
 // ─── Public API ────────────────────────────────────────────────
@@ -101,6 +173,7 @@ export async function createOrder(data: RegisterOrderData): Promise<Order> {
     cargue_start: null,
     cargue_end: null,
     cargue_time: null,
+    despachado_kg: 0,
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
   };
   orders.push(order);
@@ -170,8 +243,37 @@ export async function deleteOrder(id: number): Promise<void> {
   saveOrders(orders);
 }
 
-export async function getDashboard(): Promise<DashboardData> {
-  const completed = loadOrders().filter(o => o.status === 'completed');
+function filterByDate<T>(items: T[], period: string | undefined, date: string | undefined, key: (item: T) => string): T[] {
+  if (!period || !date) return items;
+  if (period === 'day') return items.filter(i => key(i) === date);
+  if (period === 'month') {
+    const prefix = date.slice(0, 7);
+    return items.filter(i => key(i).startsWith(prefix));
+  }
+  if (period === 'week') {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    const mStr = monday.toISOString().split('T')[0];
+    const sStr = sunday.toISOString().split('T')[0];
+    return items.filter(i => key(i) >= mStr && key(i) <= sStr);
+  }
+  return items;
+}
+
+export async function getDashboard(params: { period?: string; date?: string } = {}): Promise<DashboardData> {
+  const allOrders = loadOrders().filter(o => o.status === 'completed');
+  const completed = filterByDate(allOrders, params.period, params.date, o => o.date);
+
+  const allDespachos = loadDespachos();
+  const despachos = filterByDate(allDespachos, params.period, params.date, d => d.created_at.split('T')[0]);
+
+  const allUnloadings = loadUnloadings();
+  const unloadings = filterByDate(allUnloadings, params.period, params.date, u => u.date);
+
   const totalOrders = completed.length;
   const totalKg = completed.reduce((s, o) => s + o.kg, 0);
   const avgKgPerHour = totalOrders > 0 ? completed.reduce((s, o) => s + (o.kg_per_hour ?? 0), 0) / totalOrders : 0;
@@ -186,46 +288,49 @@ export async function getDashboard(): Promise<DashboardData> {
   const typeMap = new Map<string, { total_kg: number; total_orders: number; sum_eff: number }>();
 
   for (const o of completed) {
-    // Operator
     let op = opMap.get(o.operator);
     if (!op) { op = { total_kg: 0, total_orders: 0, sum_kgph: 0, sum_eff: 0 }; opMap.set(o.operator, op); }
-    op.total_kg += o.kg;
-    op.total_orders++;
-    op.sum_kgph += o.kg_per_hour ?? 0;
-    op.sum_eff += o.efficiency ?? 0;
+    op.total_kg += o.kg; op.total_orders++; op.sum_kgph += o.kg_per_hour ?? 0; op.sum_eff += o.efficiency ?? 0;
 
-    // Day
     let d = dayMap.get(o.date);
     if (!d) { d = { total_kg: 0, total_orders: 0, sum_eff: 0 }; dayMap.set(o.date, d); }
-    d.total_kg += o.kg;
-    d.total_orders++;
-    d.sum_eff += o.efficiency ?? 0;
+    d.total_kg += o.kg; d.total_orders++; d.sum_eff += o.efficiency ?? 0;
 
-    // Type
     let t = typeMap.get(o.type);
     if (!t) { t = { total_kg: 0, total_orders: 0, sum_eff: 0 }; typeMap.set(o.type, t); }
-    t.total_kg += o.kg;
-    t.total_orders++;
-    t.sum_eff += o.efficiency ?? 0;
+    t.total_kg += o.kg; t.total_orders++; t.sum_eff += o.efficiency ?? 0;
   }
 
-  const kgByOperator = Array.from(opMap.entries()).map(([operator, d]) => ({
-    operator, total_kg: d.total_kg, total_orders: d.total_orders,
-    avg_kg_per_hour: d.total_orders > 0 ? Math.round((d.sum_kgph / d.total_orders) * 100) / 100 : 0,
-    avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
-  })).sort((a, b) => b.total_kg - a.total_kg);
+  const despKg = despachos.reduce((s, d) => s + d.kg, 0);
+  const despVehiculos = despachos.length;
+  const despRutas = new Set(despachos.map(d => d.ruta).filter(Boolean)).size;
 
-  const productionByDay = Array.from(dayMap.entries()).map(([date, d]) => ({
-    date, total_kg: d.total_kg, total_orders: d.total_orders,
-    avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
-  })).sort((a, b) => a.date.localeCompare(b.date));
+  const uncKg = unloadings.reduce((s, u) => s + u.kg, 0);
+  const uncPtm = unloadings.length;
+  const uncHours = unloadings.reduce((s, u) => {
+    const m = u.time_spent?.match(/(\d+)h\s*(\d+)m/);
+    return m ? s + parseInt(m[1]) + parseInt(m[2]) / 60 : s;
+  }, 0);
 
-  const productionByType = Array.from(typeMap.entries()).map(([type, d]) => ({
-    type, total_kg: d.total_kg, total_orders: d.total_orders,
-    avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
-  }));
-
-  return { total_orders: totalOrders, total_kg: totalKg, avg_kg_per_hour: avgKgPerHour, avg_efficiency: avgEfficiency, total_hours: totalHours, kgByOperator, productionByDay, productionByType };
+  return {
+    total_orders: totalOrders, total_kg: totalKg,
+    avg_kg_per_hour: avgKgPerHour, avg_efficiency: avgEfficiency, total_hours: totalHours,
+    kgByOperator: Array.from(opMap.entries()).map(([operator, d]) => ({
+      operator, total_kg: d.total_kg, total_orders: d.total_orders,
+      avg_kg_per_hour: d.total_orders > 0 ? Math.round((d.sum_kgph / d.total_orders) * 100) / 100 : 0,
+      avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+    })).sort((a, b) => b.total_kg - a.total_kg),
+    productionByDay: Array.from(dayMap.entries()).map(([date, d]) => ({
+      date, total_kg: d.total_kg, total_orders: d.total_orders,
+      avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+    })).sort((a, b) => a.date.localeCompare(b.date)),
+    productionByType: Array.from(typeMap.entries()).map(([type, d]) => ({
+      type, total_kg: d.total_kg, total_orders: d.total_orders,
+      avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+    })),
+    despachos: { total_kg: despKg, total_vehiculos: despVehiculos, total_rutas: despRutas },
+    descargues: { total_kg: uncKg, total_ptm: uncPtm, total_hours: Math.round(uncHours * 100) / 100 },
+  };
 }
 
 export async function getStatistics(params: { operator?: string; period?: string; date?: string } = {}): Promise<StatisticsData> {
@@ -319,6 +424,93 @@ export async function getAllClients(): Promise<string[]> {
   return Array.from(new Set(loadOrders().map(o => o.cliente).filter(Boolean))).sort();
 }
 
+// ─── Todos los despachos (para Excel) ─────────────────────────
+
+export async function getAllDespachos(): Promise<Despacho[]> {
+  return loadDespachos().sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+}
+
+// ─── Descargue de contenedores ────────────────────────────────
+
+export async function getUnloadings(): Promise<Unloading[]> {
+  const u = loadUnloadings();
+  ensureUnloadingIds(u);
+  return u.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+}
+
+export async function createUnloading(data: UnloadingFormData): Promise<Unloading> {
+  const unloadings = loadUnloadings();
+  ensureUnloadingIds(unloadings);
+  const unloading: Unloading = {
+    id: nextUnloadingId++,
+    date: data.date,
+    ptm: data.ptm,
+    kg: data.kg,
+    operators: data.operators,
+    start_time: data.start_time,
+    end_time: data.end_time,
+    time_spent: calculateTimeSpent(data.start_time, data.end_time),
+    created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+  };
+  unloadings.push(unloading);
+  saveUnloadings(unloadings);
+  return unloading;
+}
+
+export async function deleteUnloading(id: number): Promise<void> {
+  const unloadings = loadUnloadings().filter(u => u.id !== id);
+  saveUnloadings(unloadings);
+}
+
+// ─── Operadores ──────────────────────────────────────────────────
+
+const OPERATORS_KEY = 'pedidos_operators';
+
+function loadOperators(): Operator[] {
+  try { return JSON.parse(localStorage.getItem(OPERATORS_KEY) || '[]'); } catch { return []; }
+}
+function saveOperators(ops: Operator[]) { localStorage.setItem(OPERATORS_KEY, JSON.stringify(ops)); }
+
+let nextOpId = 1;
+function ensureOpIds(ops: Operator[]) {
+  const max = ops.reduce((m, o) => Math.max(m, o.id), 0);
+  if (max >= nextOpId) nextOpId = max + 1;
+}
+
+export async function getOperators(): Promise<Operator[]> {
+  const ops = loadOperators();
+  if (ops.length === 0) {
+    const defaultNames = ['sebastian', 'edwin', 'gongora', 'emerson', 'neider', 'ovidio', 'jean marco', 'urbano', 'luis'];
+    ops.push(...defaultNames.map((name, i) => ({
+      id: i + 1, name, created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    })));
+    saveOperators(ops);
+    ensureOpIds(ops);
+  }
+  return ops.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function createOperator(name: string): Promise<Operator> {
+  const ops = loadOperators();
+  ensureOpIds(ops);
+  const op: Operator = {
+    id: nextOpId++,
+    name,
+    created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+  };
+  ops.push(op);
+  saveOperators(ops);
+  return op;
+}
+
+export async function deleteOperator(id: number): Promise<void> {
+  const ops = loadOperators().filter(o => o.id !== id);
+  saveOperators(ops);
+}
+
 export async function clearAllData(): Promise<void> {
   localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(DESPACHOS_KEY);
+  localStorage.removeItem(UNLOADINGS_KEY);
+  localStorage.removeItem(OPERATORS_KEY);
 }

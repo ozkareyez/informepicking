@@ -1,4 +1,4 @@
-import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client } from './types';
+import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator } from './types';
 import * as supabaseStore from './supabaseStore';
 
 const active = supabaseStore;
@@ -26,8 +26,8 @@ export async function getClients(): Promise<Client[]> {
   return active.getClients();
 }
 
-export async function getDashboard(): Promise<DashboardData> {
-  return active.getDashboard();
+export async function getDashboard(params: { period?: string; date?: string } = {}): Promise<DashboardData> {
+  return active.getDashboard(params);
 }
 
 export async function getStatistics(params: { operator?: string; period?: string; date?: string } = {}): Promise<StatisticsData> {
@@ -69,4 +69,52 @@ export async function dispatchOrder(id: number, data: {
 
 export async function clearAllData(): Promise<void> {
   return active.clearAllData();
+}
+
+// ─── Despachos ──────────────────────────────────────────────────
+
+export async function getDespachos(orderId: number): Promise<Despacho[]> {
+  return active.getDespachos(orderId);
+}
+
+export async function getAllDespachos(): Promise<Despacho[]> {
+  return active.getAllDespachos();
+}
+
+export async function createDespacho(orderId: number, data: {
+  placa: string;
+  plc: string;
+  kg: number;
+  cargue_start: string;
+  cargue_end: string;
+}): Promise<Despacho> {
+  return active.createDespacho(orderId, data);
+}
+
+// ─── Descargue de contenedores ─────────────────────────────────
+
+export async function getUnloadings(): Promise<Unloading[]> {
+  return active.getUnloadings();
+}
+
+export async function createUnloading(data: UnloadingFormData): Promise<Unloading> {
+  return active.createUnloading(data);
+}
+
+export async function deleteUnloading(id: number): Promise<void> {
+  return active.deleteUnloading(id);
+}
+
+// ─── Operadores ────────────────────────────────────────────────
+
+export async function getOperators(): Promise<Operator[]> {
+  return active.getOperators();
+}
+
+export async function createOperator(name: string): Promise<Operator> {
+  return active.createOperator(name);
+}
+
+export async function deleteOperator(id: number): Promise<void> {
+  return active.deleteOperator(id);
 }

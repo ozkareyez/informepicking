@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { X, Save } from 'lucide-react';
-import type { Order } from '../types';
+import type { Order, Operator } from '../types';
+import { getOperators } from '../api';
 import { getToday, getCurrentTime } from '../utils';
 
 interface Props {
@@ -10,6 +12,12 @@ interface Props {
 }
 
 export default function EditOrderModal({ order, onSave, onClose }: Props) {
+  const [operators, setOperators] = useState<Operator[]>([]);
+
+  useEffect(() => {
+    getOperators().then(setOperators).catch(() => {});
+  }, []);
+
   const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm({
     values: order ? {
       date: order.date,
@@ -71,8 +79,13 @@ export default function EditOrderModal({ order, onSave, onClose }: Props) {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-0.5">Operario</label>
-              <input type="text" {...register('operator', { required: true })}
-                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
+              <select {...register('operator', { required: true })}
+                className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 bg-white">
+                <option value="">Seleccionar</option>
+                {operators.map(op => (
+                  <option key={op.id} value={op.name}>{op.name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-0.5">Tipo</label>

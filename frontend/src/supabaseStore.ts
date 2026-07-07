@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client } from './types';
+import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator } from './types';
 import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime } from './utils';
 
 function mapOrder(row: any): Order {
@@ -22,6 +22,22 @@ function mapOrder(row: any): Order {
     cargue_start: row.cargue_start ?? null,
     cargue_end: row.cargue_end ?? null,
     cargue_time: row.cargue_time ?? null,
+    despachado_kg: Number(row.despachado_kg ?? 0),
+    created_at: row.created_at,
+  };
+}
+
+function mapDespacho(row: any): Despacho {
+  return {
+    id: row.id,
+    order_id: row.order_id,
+    ruta: row.ruta ?? '',
+    placa: row.placa,
+    plc: row.plc,
+    kg: Number(row.kg),
+    cargue_start: row.cargue_start,
+    cargue_end: row.cargue_end,
+    cargue_time: row.cargue_time,
     created_at: row.created_at,
   };
 }
@@ -143,10 +159,72 @@ export async function deleteOrder(id: number): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export async function getDashboard(): Promise<DashboardData> {
-  const { data, error } = await getSupabase().from('orders').select('*').eq('status', 'completed');
-  if (error) throw new Error(error.message);
-  const completed = (data || []).map(mapOrder);
+function getDateRange(period: string, date: string): { start: string; end: string } {
+  if (period === 'day') {
+    const d = new Date(date);
+    const next = new Date(d);
+    next.setDate(next.getDate() + 1);
+    return { start: date, end: next.toISOString().split('T')[0] };
+  }
+  if (period === 'month') {
+    const prefix = date.slice(0, 7);
+    const d = new Date(`${prefix}-01`);
+    const next = new Date(d);
+    next.setMonth(next.getMonth() + 1);
+    return { start: `${prefix}-01`, end: next.toISOString().split('T')[0] };
+  }
+  if (period === 'week') {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    const next = new Date(sunday);
+    next.setDate(next.getDate() + 1);
+    return { start: monday.toISOString().split('T')[0], end: next.toISOString().split('T')[0] };
+  }
+  return { start: '', end: '' };
+}
+
+function applyDateFilter(query: any, period: string | undefined, date: string | undefined, column = 'date'): any {
+  if (!period || !date) return query;
+  if (period === 'day') return query.eq(column, date);
+  if (period === 'month') {
+    const prefix = date.slice(0, 7);
+    return query.gte(column, `${prefix}-01`).lte(column, `${prefix}-31`);
+  }
+  if (period === 'week') {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(d.setDate(diff));
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    return query.gte(column, monday.toISOString().split('T')[0]).lte(column, sunday.toISOString().split('T')[0]);
+  }
+  return query;
+}
+
+export async function getDashboard(params: { period?: string; date?: string } = {}): Promise<DashboardData> {
+  let orderQuery = getSupabase().from('orders').select('*').eq('status', 'completed');
+  orderQuery = applyDateFilter(orderQuery, params.period, params.date);
+  const { data: orderData, error: orderError } = await orderQuery;
+  if (orderError) throw new Error(orderError.message);
+  const completed = (orderData || []).map(mapOrder);
+
+  let despQuery = getSupabase().from('despachos').select('*');
+  if (params.period && params.date) {
+    const { start, end } = getDateRange(params.period, params.date);
+    despQuery = despQuery.gte('created_at', start).lt('created_at', end);
+  }
+  const { data: despData } = await despQuery;
+  const despachos = (despData || []).map(mapDespacho);
+
+  let uncQuery = getSupabase().from('unloadings').select('*');
+  uncQuery = applyDateFilter(uncQuery, params.period, params.date);
+  const { data: uncData } = await uncQuery;
+  const unloadings = (uncData || []).map(mapUnloading);
 
   const totalOrders = completed.length;
   const totalKg = completed.reduce((s, o) => s + o.kg, 0);
@@ -175,6 +253,17 @@ export async function getDashboard(): Promise<DashboardData> {
     t.total_kg += o.kg; t.total_orders++; t.sum_eff += o.efficiency ?? 0;
   }
 
+  const despKg = despachos.reduce((s, d) => s + d.kg, 0);
+  const despVehiculos = despachos.length;
+  const despRutas = new Set(despachos.map(d => d.ruta).filter(Boolean)).size;
+
+  const uncKg = unloadings.reduce((s, u) => s + u.kg, 0);
+  const uncPtm = unloadings.length;
+  const uncHours = unloadings.reduce((s, u) => {
+    const m = u.time_spent?.match(/(\d+)h\s*(\d+)m/);
+    return m ? s + parseInt(m[1]) + parseInt(m[2]) / 60 : s;
+  }, 0);
+
   return {
     total_orders: totalOrders, total_kg: totalKg,
     avg_kg_per_hour: avgKgPerHour, avg_efficiency: avgEfficiency, total_hours: totalHours,
@@ -191,6 +280,8 @@ export async function getDashboard(): Promise<DashboardData> {
       type, total_kg: d.total_kg, total_orders: d.total_orders,
       avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
     })),
+    despachos: { total_kg: despKg, total_vehiculos: despVehiculos, total_rutas: despRutas },
+    descargues: { total_kg: uncKg, total_ptm: uncPtm, total_hours: Math.round(uncHours * 100) / 100 },
   };
 }
 
@@ -276,7 +367,123 @@ export async function dispatchOrder(id: number, data: {
   return mapOrder(row);
 }
 
+// ─── Despachos ──────────────────────────────────────────────────
+
+export async function getDespachos(orderId: number): Promise<Despacho[]> {
+  const { data, error } = await getSupabase().from('despachos').select('*').eq('order_id', orderId).order('created_at', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data || []).map(mapDespacho);
+}
+
+export async function createDespacho(orderId: number, data: {
+  placa: string;
+  plc: string;
+  kg: number;
+  cargue_start: string;
+  cargue_end: string;
+  ruta?: string;
+}): Promise<Despacho> {
+  const cargue_time = calculateCargueTime(data.cargue_start, data.cargue_end);
+
+  const { data: despacho, error: insertError } = await getSupabase().from('despachos').insert({
+    order_id: orderId,
+    ruta: data.ruta ?? '',
+    placa: data.placa,
+    plc: data.plc,
+    kg: data.kg,
+    cargue_start: data.cargue_start,
+    cargue_end: data.cargue_end,
+    cargue_time,
+  }).select().single();
+  if (insertError) throw new Error(insertError.message);
+
+  const { data: order } = await getSupabase().from('orders').select('kg, despachado_kg').eq('id', orderId).single();
+  const newDespachado = Number(order?.despachado_kg ?? 0) + data.kg;
+  const totalKg = Number(order?.kg ?? 0);
+  const newStatus = newDespachado >= totalKg ? 'despachado' : 'completed';
+
+  await getSupabase().from('orders').update({
+    despachado_kg: newDespachado,
+    status: newStatus,
+  }).eq('id', orderId);
+
+  return mapDespacho(despacho);
+}
+
+// ─── Todos los despachos (para Excel) ─────────────────────────
+
+export async function getAllDespachos(): Promise<Despacho[]> {
+  const { data, error } = await getSupabase().from('despachos').select('*').order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data || []).map(mapDespacho);
+}
+
+// ─── Descargue de contenedores ────────────────────────────────
+
+function mapUnloading(row: any): Unloading {
+  return {
+    id: row.id,
+    date: row.date,
+    ptm: row.ptm,
+    kg: Number(row.kg),
+    operators: row.operators ?? [],
+    start_time: row.start_time ?? '',
+    end_time: row.end_time ?? '',
+    time_spent: row.time_spent ?? null,
+    created_at: row.created_at,
+  };
+}
+
+export async function getUnloadings(): Promise<Unloading[]> {
+  const { data, error } = await getSupabase().from('unloadings').select('*').order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data || []).map(mapUnloading);
+}
+
+export async function createUnloading(data: UnloadingFormData): Promise<Unloading> {
+  const time_spent = calculateTimeSpent(data.start_time, data.end_time);
+  const { data: row, error } = await getSupabase().from('unloadings').insert({
+    date: data.date,
+    ptm: data.ptm,
+    kg: data.kg,
+    operators: data.operators,
+    start_time: data.start_time,
+    end_time: data.end_time,
+    time_spent,
+  }).select().single();
+  if (error) throw new Error(error.message);
+  return mapUnloading(row);
+}
+
+export async function deleteUnloading(id: number): Promise<void> {
+  const { error } = await getSupabase().from('unloadings').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ─── Operadores ──────────────────────────────────────────────────
+
+export async function getOperators(): Promise<Operator[]> {
+  const { data, error } = await getSupabase().from('operators').select('*').order('name', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data || []).map((r: any) => ({ id: r.id, name: r.name, created_at: r.created_at }));
+}
+
+export async function createOperator(name: string): Promise<Operator> {
+  const { data, error } = await getSupabase().from('operators').insert({ name }).select().single();
+  if (error) throw new Error(error.message);
+  return { id: data.id, name: data.name, created_at: data.created_at };
+}
+
+export async function deleteOperator(id: number): Promise<void> {
+  const { error } = await getSupabase().from('operators').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ─── Limpiar ────────────────────────────────────────────────────
+
 export async function clearAllData(): Promise<void> {
+  await getSupabase().from('despachos').delete().neq('id', 0);
+  await getSupabase().from('unloadings').delete().neq('id', 0);
   const { error } = await getSupabase().from('orders').delete().neq('id', 0);
   if (error) throw new Error(error.message);
 }

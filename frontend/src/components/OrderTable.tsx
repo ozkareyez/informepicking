@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Search, ArrowUpDown, Edit, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, Trash, User, Truck, Download } from 'lucide-react';
-import { getOrders, deleteOrder, clearAllData } from '../api';
-import type { Order } from '../types';
+import { getOrders, deleteOrder, clearAllData, getAllDespachos, getUnloadings } from '../api';
+import type { Order, Despacho, Unloading } from '../types';
 import * as XLSX from 'xlsx';
 
 const EXCEL_COL_WIDTHS = [
@@ -98,11 +98,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       'Kg por hora': o.kg_per_hour ?? '',
       'Eficiencia %': o.efficiency != null ? `${o.efficiency.toFixed(2)}%` : '',
       'Tipo de pedido': o.type,
-      PLC: o.plc ?? '',
-      Placa: o.placa ?? '',
-      'Inicio cargue': o.cargue_start ?? '',
-      'Fin cargue': o.cargue_end ?? '',
-      'Tiempo cargue': o.cargue_time ?? '',
+      'Kg despachado': o.despachado_kg,
       Estado: o.status === 'despachado' ? 'Despachado' : o.status === 'completed' ? 'Completado' : o.status === 'pending' ? 'En progreso' : 'Sin operario',
     }));
     const wb = XLSX.utils.book_new();
@@ -135,6 +131,57 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
 
     XLSX.utils.book_append_sheet(wb, ws, 'Pedidos');
 
+    // ─── Sheet: Despachos ───
+    try {
+      const allDespachos = await getAllDespachos();
+      if (allDespachos.length > 0) {
+        const despData = allDespachos.map(d => ({
+          'ID Pedido': d.order_id,
+          Ruta: d.ruta,
+          Placa: d.placa,
+          PLC: d.plc,
+          Kg: d.kg,
+          'Inicio cargue': d.cargue_start,
+          'Fin cargue': d.cargue_end,
+          'Tiempo cargue': d.cargue_time,
+          Fecha: d.created_at?.slice(0, 10) ?? '',
+        }));
+        const wsDesp = XLSX.utils.json_to_sheet(despData);
+        wsDesp['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }];
+        const despRange = XLSX.utils.decode_range(wsDesp['!ref'] || 'A1:A1');
+        for (let c = despRange.s.c; c <= despRange.e.c; c++) {
+          const addr = XLSX.utils.encode_cell({ r: 0, c });
+          if (wsDesp[addr]) wsDesp[addr].s = EXCEL_HEADER_STYLE;
+        }
+        XLSX.utils.book_append_sheet(wb, wsDesp, 'Despachos');
+      }
+    } catch { /* ignore errors loading despachos */ }
+
+    // ─── Sheet: Descargues ───
+    try {
+      const allUnloadings = await getUnloadings();
+      if (allUnloadings.length > 0) {
+        const uncData = allUnloadings.map(u => ({
+          Fecha: u.date,
+          PTM: u.ptm,
+          Kg: u.kg,
+          Operarios: u.operators.join(', '),
+          'Hora inicio': u.start_time,
+          'Hora final': u.end_time,
+          'Tiempo descargue': u.time_spent ?? '',
+        }));
+        const wsUnc = XLSX.utils.json_to_sheet(uncData);
+        wsUnc['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+        const uncRange = XLSX.utils.decode_range(wsUnc['!ref'] || 'A1:A1');
+        for (let c = uncRange.s.c; c <= uncRange.e.c; c++) {
+          const addr = XLSX.utils.encode_cell({ r: 0, c });
+          if (wsUnc[addr]) wsUnc[addr].s = EXCEL_HEADER_STYLE;
+        }
+        XLSX.utils.book_append_sheet(wb, wsUnc, 'Descargues');
+      }
+    } catch { /* ignore errors loading unloadings */ }
+
+    // ─── Sheet: Resumen ───
     const totalOrders = orders.length;
     const totalKg = orders.reduce((s, o) => s + o.kg, 0);
     const completed = orders.filter(o => o.status === 'completed' || o.status === 'despachado');

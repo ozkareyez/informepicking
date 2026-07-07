@@ -1,4 +1,4 @@
-import { Package, LayoutDashboard, ClipboardList, BarChart3, Timer, Truck } from 'lucide-react';
+import { Package, LayoutDashboard, ClipboardList, BarChart3, Timer, Truck, Container, Users } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: string;
@@ -13,6 +13,8 @@ const tabs = [
   { id: 'pendientes', label: 'Pendientes', icon: Timer },
   { id: 'despacho', label: 'Despacho', icon: Truck },
   { id: 'pedidos', label: 'Pedidos', icon: Package },
+  { id: 'descargue', label: 'Descargue', icon: Container },
+  { id: 'operarios', label: 'Operarios', icon: Users },
   { id: 'estadisticas', label: 'Estadísticas', icon: BarChart3 },
 ];
 

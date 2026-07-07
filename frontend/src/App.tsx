@@ -8,6 +8,8 @@ import OrderTable from './components/OrderTable';
 import Statistics from './components/Statistics';
 import EditOrderModal from './components/EditOrderModal';
 import DispatchView from './components/DispatchView';
+import UnloadingView from './components/UnloadingView';
+import OperatorView from './components/OperatorView';
 import { createOrder, assignOperator, updateOrder, getPendingOrders, getUnassignedOrders } from './api';
 import type { Order } from './types';
 
@@ -105,6 +107,10 @@ export default function App() {
             onDelete={handleDelete}
           />
         )}
+
+        {activeTab === 'descargue' && <UnloadingView />}
+
+        {activeTab === 'operarios' && <OperatorView />}
 
         {activeTab === 'estadisticas' && <Statistics />}
       </main>

@@ -17,6 +17,20 @@ export interface Order {
   cargue_start: string | null;
   cargue_end: string | null;
   cargue_time: string | null;
+  despachado_kg: number;
+  created_at: string;
+}
+
+export interface Despacho {
+  id: number;
+  order_id: number;
+  ruta: string;
+  placa: string;
+  plc: string;
+  kg: number;
+  cargue_start: string;
+  cargue_end: string;
+  cargue_time: string;
   created_at: string;
 }
 
@@ -51,6 +65,8 @@ export interface DashboardData {
   kgByOperator: { operator: string; total_kg: number; avg_kg_per_hour: number; avg_efficiency: number; total_orders: number }[];
   productionByDay: { date: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
   productionByType: { type: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
+  despachos: { total_kg: number; total_vehiculos: number; total_rutas: number };
+  descargues: { total_kg: number; total_ptm: number; total_hours: number };
 }
 
 export interface StatisticsData {
@@ -69,4 +85,31 @@ export interface StatisticsData {
 
 export interface Client {
   cliente: string;
+}
+
+export interface Operator {
+  id: number;
+  name: string;
+  created_at: string;
+}
+
+export interface Unloading {
+  id: number;
+  date: string;
+  ptm: string;
+  kg: number;
+  operators: string[];
+  start_time: string;
+  end_time: string;
+  time_spent: string | null;
+  created_at: string;
+}
+
+export interface UnloadingFormData {
+  date: string;
+  ptm: string;
+  kg: number;
+  operators: string[];
+  start_time: string;
+  end_time: string;
 }

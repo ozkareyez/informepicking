@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, Clock, User, Package, UserPlus } from 'lucide-react';
-import { getPendingOrders, getUnassignedOrders, completeOrder } from '../api';
-import type { Order } from '../types';
+import { getPendingOrders, getUnassignedOrders, completeOrder, getOperators } from '../api';
+import type { Order, Operator } from '../types';
 import { getCurrentTime, calculateHours, calculateKgPerHour, calculateEfficiency, formatEfficiency } from '../utils';
 
 interface Props {
@@ -39,6 +39,7 @@ export default function PendingOrders({ onCompleted, onAssignOperator }: Props) 
   const [finalizing, setFinalizing] = useState<number | null>(null);
   const [assigning, setAssigning] = useState<number | null>(null);
   const [assignName, setAssignName] = useState('');
+  const [operators, setOperators] = useState<Operator[]>([]);
   const [summary, setSummary] = useState<{
     order: Order;
     kg_per_hour: number;
@@ -49,12 +50,14 @@ export default function PendingOrders({ onCompleted, onAssignOperator }: Props) 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [pendingData, unassignedData] = await Promise.all([
+      const [pendingData, unassignedData, ops] = await Promise.all([
         getPendingOrders(),
         getUnassignedOrders(),
+        getOperators().catch(() => [] as Operator[]),
       ]);
       setPending(pendingData);
       setUnassigned(unassignedData);
+      setOperators(ops);
     } catch {
       console.error('Error loading orders');
     } finally {
@@ -167,10 +170,13 @@ export default function PendingOrders({ onCompleted, onAssignOperator }: Props) 
                   </div>
                   {assigning === order.id ? (
                     <div className="flex items-center gap-2">
-                      <input type="text" value={assignName} onChange={e => setAssignName(e.target.value)}
-                        placeholder="Nombre del operario" autoFocus
-                        className="flex-1 px-3 py-2.5 rounded-lg border border-gray-300 text-base focus:ring-2 focus:ring-blue-500"
-                        onKeyDown={e => { if (e.key === 'Enter') handleAssign(order); if (e.key === 'Escape') { setAssigning(null); setAssignName(''); } }} />
+                      <select value={assignName} onChange={e => setAssignName(e.target.value)} autoFocus
+                        className="flex-1 px-3 py-2.5 rounded-lg border border-gray-300 text-base focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="">Seleccionar operario</option>
+                        {operators.map(op => (
+                          <option key={op.id} value={op.name}>{op.name}</option>
+                        ))}
+                      </select>
                       <button onClick={() => handleAssign(order)} disabled={!assignName.trim()}
                         className="bg-blue-600 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 min-h-[44px]">
                         Asignar
@@ -201,10 +207,13 @@ export default function PendingOrders({ onCompleted, onAssignOperator }: Props) 
                   <div className="flex items-center gap-2 shrink-0">
                     {assigning === order.id ? (
                       <div className="flex items-center gap-1.5">
-                        <input type="text" value={assignName} onChange={e => setAssignName(e.target.value)}
-                          placeholder="Operario" autoFocus
-                          className="px-2 py-1 rounded-md border border-gray-300 text-sm w-32 focus:ring-2 focus:ring-blue-500"
-                          onKeyDown={e => { if (e.key === 'Enter') handleAssign(order); if (e.key === 'Escape') { setAssigning(null); setAssignName(''); } }} />
+                        <select value={assignName} onChange={e => setAssignName(e.target.value)} autoFocus
+                          className="px-2 py-1 rounded-md border border-gray-300 text-sm w-36 focus:ring-2 focus:ring-blue-500 bg-white">
+                          <option value="">Operario</option>
+                          {operators.map(op => (
+                            <option key={op.id} value={op.name}>{op.name}</option>
+                          ))}
+                        </select>
                         <button onClick={() => handleAssign(order)} disabled={!assignName.trim()}
                           className="bg-blue-600 text-white px-2.5 py-1 rounded-md text-xs font-medium hover:bg-blue-700 disabled:opacity-50">
                           OK
