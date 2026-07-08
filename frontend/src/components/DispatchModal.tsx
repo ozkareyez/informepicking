@@ -20,17 +20,16 @@ interface Props {
 export default function DispatchModal({ order, despachos, onSave, onClose }: Props) {
   const saldo = order.kg - order.despachado_kg;
   const existingRuta = despachos.length > 0 ? despachos[0].ruta : '';
-  const nextNum = despachos.length + 1;
 
-  const [ruta, setRuta] = useState(existingRuta);
+  const defaultRuta = existingRuta || (despachos.length === 0 ? order.cliente : '');
+  const [ruta, setRuta] = useState(defaultRuta);
   const [placa, setPlaca] = useState('');
-  const [plc, setPlc] = useState(existingRuta ? `${existingRuta}${nextNum}` : '');
+  const [plc, setPlc] = useState('');
   const [kg, setKg] = useState(saldo > 0 ? String(saldo) : '');
   const [cargueStart, setCargueStart] = useState('');
   const [cargueEnd, setCargueEnd] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-  const [plcEdited, setPlcEdited] = useState(false);
 
   const kgNum = parseFloat(kg) || 0;
   const cargueTimePreview =
@@ -40,14 +39,6 @@ export default function DispatchModal({ order, despachos, onSave, onClose }: Pro
 
   function handleRutaChange(val: string) {
     setRuta(val);
-    if (!plcEdited && val) {
-      setPlc(`${val}${nextNum}`);
-    }
-  }
-
-  function handlePlcChange(val: string) {
-    setPlcEdited(true);
-    setPlc(val);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -155,13 +146,13 @@ export default function DispatchModal({ order, despachos, onSave, onClose }: Pro
               className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm uppercase focus:ring-2 focus:ring-blue-500" />
           </div>
 
-          {/* PLC - auto-generated from ruta */}
+          {/* PLC (documento) */}
           <div>
             <label className="block text-xs sm:text-[10px] font-medium text-gray-500 mb-1 sm:mb-0.5">
-              PLC (documento) <span className="text-gray-400">— se autogenera desde la ruta</span>
+              PLC (documento)
             </label>
-            <input type="text" value={plc} onChange={e => handlePlcChange(e.target.value)}
-              placeholder={ruta ? `${ruta}${nextNum}` : 'Ej: PLC-001'}
+            <input type="text" value={plc} onChange={e => setPlc(e.target.value)}
+              placeholder="Ej: PLC-001"
               className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
           </div>
 
