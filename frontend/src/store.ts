@@ -57,6 +57,7 @@ export async function createDespacho(orderId: number, data: {
   placa: string;
   plc: string;
   kg: number;
+  date: string;
   cargue_start: string;
   cargue_end: string;
   ruta?: string;
@@ -72,6 +73,7 @@ export async function createDespacho(orderId: number, data: {
     placa: data.placa,
     plc: data.plc,
     kg: data.kg,
+    date: data.date,
     cargue_start: data.cargue_start,
     cargue_end: data.cargue_end,
     cargue_time,

@@ -95,8 +95,10 @@ export async function createDespacho(orderId: number, data: {
   placa: string;
   plc: string;
   kg: number;
+  date: string;
   cargue_start: string;
   cargue_end: string;
+  ruta?: string;
 }): Promise<Despacho> {
   return active.createDespacho(orderId, data);
 }

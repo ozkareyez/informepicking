@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { X, Truck, Save, Package, MapPin } from 'lucide-react';
 import type { Order, Despacho } from '../types';
-import { getCurrentTime, calculateCargueTime } from '../utils';
+import { getCurrentTime, calculateCargueTime, getToday } from '../utils';
 
 interface Props {
   order: Order;
@@ -10,6 +10,7 @@ interface Props {
     placa: string;
     plc: string;
     kg: number;
+    date: string;
     cargue_start: string;
     cargue_end: string;
     ruta: string;
@@ -26,6 +27,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose }: Pro
   const [placa, setPlaca] = useState('');
   const [plc, setPlc] = useState('');
   const [kg, setKg] = useState(saldo > 0 ? String(saldo) : '');
+  const [date, setDate] = useState(getToday());
   const [cargueStart, setCargueStart] = useState('');
   const [cargueEnd, setCargueEnd] = useState('');
   const [saving, setSaving] = useState(false);
@@ -61,6 +63,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose }: Pro
         placa: placa.trim(),
         plc: plc.trim(),
         kg: kgNum,
+        date,
         cargue_start: cargueStart,
         cargue_end: cargueEnd,
       });
@@ -121,6 +124,13 @@ export default function DispatchModal({ order, despachos, onSave, onClose }: Pro
               ))}
             </div>
           )}
+
+          {/* Date */}
+          <div>
+            <label className="block text-xs sm:text-[10px] font-medium text-gray-500 mb-1 sm:mb-0.5">Fecha del despacho</label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
+          </div>
 
           {/* Route name */}
           <div>

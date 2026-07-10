@@ -55,6 +55,7 @@ export default function DispatchView() {
     placa: string;
     plc: string;
     kg: number;
+    date: string;
     cargue_start: string;
     cargue_end: string;
     ruta: string;

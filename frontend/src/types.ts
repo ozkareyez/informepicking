@@ -35,6 +35,7 @@ export interface Despacho {
   placa: string;
   plc: string;
   kg: number;
+  date: string;
   cargue_start: string;
   cargue_end: string;
   cargue_time: string;
