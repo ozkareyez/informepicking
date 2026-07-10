@@ -71,6 +71,10 @@ export async function clearAllData(): Promise<void> {
   return active.clearAllData();
 }
 
+export async function deleteOrdersByDateRange(startDate: string, endDate: string): Promise<void> {
+  return active.deleteOrdersByDateRange(startDate, endDate);
+}
+
 // ─── Autenticación ─────────────────────────────────────────────
 
 export async function login(username: string, password: string): Promise<User | null> {

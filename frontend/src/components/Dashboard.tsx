@@ -3,10 +3,10 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line,
 } from 'recharts';
-import { Package, Scale, TrendingUp, Clock, Gauge, Truck, Container, MapPin, Users, ArrowUpRight, ArrowDownRight } from 'lucide-react';
-import { getDashboard } from '../api';
-import type { DashboardData } from '../types';
-import { getToday } from '../utils';
+import { Package, Scale, TrendingUp, Clock, Gauge, Truck, Container, MapPin, Users, ArrowUpRight, ArrowDownRight, AlertTriangle } from 'lucide-react';
+import { getDashboard, getOrdersForDispatch, getDespachos, getOrders } from '../api';
+import type { DashboardData, Order } from '../types';
+import { getToday, getOverdueDays, getCargueStandardKgPerHour, getDescargueStandardKgPerHour, formatEfficiency } from '../utils';
 
 const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1d4ed8', '#db2777', '#f59e0b'];
 
@@ -47,26 +47,14 @@ function KpiCard({ icon: Icon, label, value, color, trend, trendLabel }: {
   );
 }
 
-function MiniCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string | number; color: string }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-100 p-3 flex items-center gap-3 hover:shadow-sm transition-shadow">
-      <div className={`${color} p-2 rounded-lg text-white shrink-0`}>
-        <Icon className="w-4 h-4" />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[10px] text-gray-500 uppercase tracking-wider truncate">{label}</p>
-        <p className="text-sm font-bold text-gray-900 truncate">{value}</p>
-      </div>
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<string>('');
   const [date, setDate] = useState(getToday());
   const [activeTab, setActiveTab] = useState<TabId>('produccion');
+  const [overdueCount, setOverdueCount] = useState(0);
+  const [overdueDays, setOverdueDays] = useState(0);
 
   useEffect(() => {
     load();
@@ -77,6 +65,19 @@ export default function Dashboard() {
     try {
       const d = await getDashboard(period ? { period, date } : {});
       setData(d);
+
+      // Calculate overdue stats from pending dispatch orders
+      try {
+        const pending = await getOrdersForDispatch();
+        let count = 0;
+        let days = 0;
+        for (const o of pending) {
+          const od = getOverdueDays(o.date, o.type);
+          if (od > 0) { count++; days += od; }
+        }
+        setOverdueCount(count);
+        setOverdueDays(days);
+      } catch {}
     } catch {
       console.error('Error loading dashboard');
     } finally {
@@ -194,10 +195,12 @@ export default function Dashboard() {
                 <LineChart data={data.productionByDay}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="%" />
                   <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
-                  <Line type="monotone" dataKey="total_kg" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3, fill: '#2563eb' }} name="Kg" />
-                  <Line type="monotone" dataKey="total_orders" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} name="Pedidos" />
+                  <Line yAxisId="left" type="monotone" dataKey="total_kg" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3, fill: '#2563eb' }} name="Kg" />
+                  <Line yAxisId="left" type="monotone" dataKey="total_orders" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} name="Pedidos" />
+                  <Line yAxisId="right" type="monotone" dataKey="avg_efficiency" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#8b5cf6' }} name="Eficiencia %" />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -227,19 +230,63 @@ export default function Dashboard() {
               </ResponsiveContainer>
             </div>
           </div>
+
+          {/* ── Tabla resumen por operario ── */}
+          {data.kgByOperator.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-blue-600" />
+                  Rendimiento por operario
+                </h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-medium text-gray-500 uppercase">Operario</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Pedidos</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Kg</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Kg/h</th>
+                      <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Eficiencia</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {data.kgByOperator.map(op => (
+                      <tr key={op.operator} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 font-medium text-gray-900">{op.operator}</td>
+                        <td className="px-3 py-2 text-right text-gray-700">{op.total_orders}</td>
+                        <td className="px-3 py-2 text-right text-gray-700">{op.total_kg.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right text-gray-700">{op.avg_kg_per_hour.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                            op.avg_efficiency >= 100 ? 'bg-green-100 text-green-800' : op.avg_efficiency >= 80 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                          }`}>
+                            {op.avg_efficiency.toFixed(2)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── Tab: Despachos ── */}
       {activeTab === 'despachos' && (
         <div className="space-y-4 animate-[fadeIn_0.2s_ease]">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <KpiCard icon={Scale} label="Kg despachados" value={`${data.despachos.total_kg.toLocaleString()} kg`} color="bg-emerald-600" />
             <KpiCard icon={Truck} label="Vehículos cargados" value={String(data.despachos.total_vehiculos)} color="bg-blue-600" />
             <KpiCard icon={MapPin} label="Rutas diferentes" value={String(data.despachos.total_rutas)} color="bg-purple-600" />
+            <KpiCard icon={Gauge} label="Eficiencia cargue" value={formatEfficiency(data.despachos.avg_efficiency)} color="bg-purple-600" />
+            <KpiCard icon={AlertTriangle} label="Pedidos con retraso" value={`${overdueCount} (${overdueDays} días)`} color="bg-red-600" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border border-blue-100 p-5">
               <div className="flex items-center gap-3 mb-3">
                 <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-sm">
@@ -275,34 +322,41 @@ export default function Dashboard() {
                   : 'Sin registros'}
               </p>
             </div>
-          </div>
 
-          {data.kgByOperator.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
-                <Scale className="w-4 h-4 text-blue-600" />
-                Resumen de despachos
+            <div className={`rounded-xl border p-4 ${data.despachos.avg_efficiency >= 100 ? 'bg-purple-50 border-purple-200' : 'bg-yellow-50 border-yellow-200'}`}>
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500">
+                Cargue: {data.despachos.avg_kg_per_hour.toFixed(0)} kg/h
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <MiniCard icon={Scale} label="Total kg" value={`${data.despachos.total_kg.toLocaleString()} kg`} color="bg-emerald-600" />
-                <MiniCard icon={Truck} label="Vehículos" value={data.despachos.total_vehiculos} color="bg-blue-600" />
-                <MiniCard icon={MapPin} label="Rutas" value={data.despachos.total_rutas} color="bg-purple-600" />
-              </div>
+              <p className={`text-3xl font-bold ${data.despachos.avg_efficiency >= 100 ? 'text-purple-900' : 'text-yellow-900'}`}>
+                {formatEfficiency(data.despachos.avg_efficiency)}
+              </p>
+              <p className="text-xs mt-1 text-gray-500">
+                Estándar: {getCargueStandardKgPerHour().toLocaleString()} kg/h
+              </p>
             </div>
-          )}
+
+            <div className="bg-red-50 rounded-xl border border-red-200 p-4">
+              <h3 className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-2">Retrasos</h3>
+              <p className="text-3xl font-bold text-red-900">{overdueCount}</p>
+              <p className="text-xs text-red-500 mt-1">
+                {overdueDays > 0 ? `${overdueDays} días de retraso acumulados` : 'Sin retrasos'}
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
       {/* ── Tab: Descargue ── */}
       {activeTab === 'descargue' && (
         <div className="space-y-4 animate-[fadeIn_0.2s_ease]">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             <KpiCard icon={Scale} label="Kg descargados" value={`${data.descargues.total_kg.toLocaleString()} kg`} color="bg-emerald-600" />
             <KpiCard icon={Container} label="PTM registrados" value={String(data.descargues.total_ptm)} color="bg-blue-600" />
             <KpiCard icon={Clock} label="Horas descargue" value={`${data.descargues.total_hours.toFixed(2)} h`} color="bg-red-600" />
+            <KpiCard icon={Gauge} label="Eficiencia descargue" value={formatEfficiency(data.descargues.avg_efficiency)} color="bg-emerald-600" />
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
             <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-xl border border-emerald-100 p-5">
               <div className="flex items-center gap-3 mb-3">
                 <div className="bg-emerald-600 p-2.5 rounded-xl text-white shadow-sm">
@@ -338,17 +392,17 @@ export default function Dashboard() {
                   : 'Sin registros'}
               </p>
             </div>
-          </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
-              <Container className="w-4 h-4 text-emerald-600" />
-              Resumen de descargue
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <MiniCard icon={Scale} label="Total kg" value={`${data.descargues.total_kg.toLocaleString()} kg`} color="bg-emerald-600" />
-              <MiniCard icon={Container} label="PTM" value={data.descargues.total_ptm} color="bg-blue-600" />
-              <MiniCard icon={Clock} label="Horas" value={`${data.descargues.total_hours.toFixed(2)} h`} color="bg-red-600" />
+            <div className={`rounded-xl border p-4 ${data.descargues.avg_efficiency >= 100 ? 'bg-emerald-50 border-emerald-200' : 'bg-yellow-50 border-yellow-200'}`}>
+              <h3 className="text-xs font-semibold uppercase tracking-wider mb-2 text-gray-500">
+                Descargue: {data.descargues.avg_kg_per_hour.toFixed(0)} kg/h
+              </h3>
+              <p className={`text-3xl font-bold ${data.descargues.avg_efficiency >= 100 ? 'text-emerald-900' : 'text-yellow-900'}`}>
+                {formatEfficiency(data.descargues.avg_efficiency)}
+              </p>
+              <p className="text-xs mt-1 text-gray-500">
+                Estándar: {getDescargueStandardKgPerHour().toLocaleString()} kg/h
+              </p>
             </div>
           </div>
         </div>

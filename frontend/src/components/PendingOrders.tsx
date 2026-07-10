@@ -167,6 +167,7 @@ export default function PendingOrders({ onCompleted, onAssignOperator }: Props) 
                     <span>SKU: {order.sku}</span>
                     <span>{order.kg} kg</span>
                     <span>{order.date}</span>
+                    {order.created_by && <span className="text-gray-400">Creado por: {order.created_by}</span>}
                   </div>
                   {assigning === order.id ? (
                     <div className="flex items-center gap-2">

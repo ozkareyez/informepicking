@@ -330,8 +330,8 @@ export async function getDashboard(params: { period?: string; date?: string } = 
       type, total_kg: d.total_kg, total_orders: d.total_orders,
       avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
     })),
-    despachos: { total_kg: despKg, total_vehiculos: despVehiculos, total_rutas: despRutas },
-    descargues: { total_kg: uncKg, total_ptm: uncPtm, total_hours: Math.round(uncHours * 100) / 100 },
+    despachos: { total_kg: despKg, total_vehiculos: despVehiculos, total_rutas: despRutas, avg_kg_per_hour: 0, avg_efficiency: 0 },
+    descargues: { total_kg: uncKg, total_ptm: uncPtm, total_hours: Math.round(uncHours * 100) / 100, avg_kg_per_hour: 0, avg_efficiency: 0 },
   };
 }
 

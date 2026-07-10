@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Search, ArrowUpDown, Edit, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, Trash, User, Truck, Download } from 'lucide-react';
-import { getOrders, deleteOrder, clearAllData, getAllDespachos, getUnloadings } from '../api';
+import { getOrders, deleteOrder, clearAllData, deleteOrdersByDateRange, getAllDespachos, getUnloadings } from '../api';
 import type { Order, Despacho, Unloading } from '../types';
+import { calculateKgPerHour, calculateEfficiency, getOverdueDays, getWeekNumber } from '../utils';
 import * as XLSX from 'xlsx';
 
 const EXCEL_COL_WIDTHS = [
@@ -45,6 +46,10 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
   const [page, setPage] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [passwordAction, setPasswordAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
+  const [showDateDelete, setShowDateDelete] = useState(false);
+  const [deleteStartDate, setDeleteStartDate] = useState('');
+  const [deleteEndDate, setDeleteEndDate] = useState('');
+  const [deleteWeek, setDeleteWeek] = useState('');
 
   useEffect(() => {
     load();
@@ -82,38 +87,12 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     }
   }
 
-  async function exportToExcel() {
-    if (orders.length === 0) {
-      alert('No hay pedidos para exportar');
-      return;
-    }
-    const data = orders.map(o => ({
-      Fecha: o.date,
-      Cliente: o.cliente,
-      SKU: o.sku,
-      Kg: o.kg,
-      Operario: o.operator,
-      'Hora inicio': o.start_time,
-      'Hora final': o.end_time ?? '',
-      'Tiempo empleado': o.time_spent ?? '',
-      'Kg por hora': o.kg_per_hour ?? '',
-      'Eficiencia %': o.efficiency != null ? `${o.efficiency.toFixed(2)}%` : '',
-      'Tipo de pedido': o.type,
-      'Kg despachado': o.despachado_kg,
-      Estado: o.status === 'despachado' ? 'Despachado' : o.status === 'completed' ? 'Completado' : o.status === 'pending' ? 'En progreso' : 'Sin operario',
-      'Creado por': o.created_by || '',
-    }));
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(data);
-
-    ws['!cols'] = EXCEL_COL_WIDTHS;
-
+  function applyHeaderStyle(ws: XLSX.WorkSheet) {
     const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
     for (let c = range.s.c; c <= range.e.c; c++) {
       const addr = XLSX.utils.encode_cell({ r: 0, c });
       if (ws[addr]) ws[addr].s = EXCEL_HEADER_STYLE;
     }
-
     for (let r = 1; r <= range.e.r; r++) {
       for (let c = range.s.c; c <= range.e.c; c++) {
         const addr = XLSX.utils.encode_cell({ r, c });
@@ -130,36 +109,95 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         }
       }
     }
+  }
 
-    XLSX.utils.book_append_sheet(wb, ws, 'Pedidos');
+  function calcEfficiencyFromKgph(kgph: number | null): string {
+    if (kgph == null || kgph === 0) return '';
+    return `${calculateEfficiency(kgph).toFixed(2)}%`;
+  }
 
-    // ─── Sheet: Despachos ───
+  function parseHours(timeSpent: string | null): number {
+    if (!timeSpent) return 0;
+    const m = timeSpent.match(/(\d+)h\s*(\d+)m/);
+    return m ? parseInt(m[1]) + parseInt(m[2]) / 60 : 0;
+  }
+
+  async function exportToExcel() {
+    if (orders.length === 0) {
+      alert('No hay pedidos para exportar');
+      return;
+    }
+
+    const wb = XLSX.utils.book_new();
+
+    // ─── Sheet 1: Registros (orders + despachos unificados) ───
+    const despachoRows: Record<number, Despacho[]> = {};
     try {
       const allDespachos = await getAllDespachos();
-      if (allDespachos.length > 0) {
-        const despData = allDespachos.map(d => ({
-          'ID Pedido': d.order_id,
-          Ruta: d.ruta,
-          Placa: d.placa,
-          PLC: d.plc,
-          Kg: d.kg,
-          'Inicio cargue': d.cargue_start,
-          'Fin cargue': d.cargue_end,
-          'Tiempo cargue': d.cargue_time,
-          Fecha: d.created_at?.slice(0, 10) ?? '',
-        }));
-        const wsDesp = XLSX.utils.json_to_sheet(despData);
-        wsDesp['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 12 }];
-        const despRange = XLSX.utils.decode_range(wsDesp['!ref'] || 'A1:A1');
-        for (let c = despRange.s.c; c <= despRange.e.c; c++) {
-          const addr = XLSX.utils.encode_cell({ r: 0, c });
-          if (wsDesp[addr]) wsDesp[addr].s = EXCEL_HEADER_STYLE;
-        }
-        XLSX.utils.book_append_sheet(wb, wsDesp, 'Despachos');
+      for (const d of allDespachos) {
+        if (!despachoRows[d.order_id]) despachoRows[d.order_id] = [];
+        despachoRows[d.order_id].push(d);
       }
-    } catch { /* ignore errors loading despachos */ }
+    } catch {}
 
-    // ─── Sheet: Descargues ───
+    const registros: any[] = [];
+    for (const o of orders) {
+      const despachos = despachoRows[o.id] || [];
+      const kgph = o.kg_per_hour ?? calculateKgPerHour(o.kg, parseHours(o.time_spent));
+      const eficiencia = calcEfficiencyFromKgph(kgph);
+      const diasRetraso = getOverdueDays(o.date, o.type);
+
+      const semana = getWeekNumber(o.date);
+      if (despachos.length === 0) {
+        registros.push({
+          Semana: semana,
+          Fecha: o.date,
+          Cliente: o.cliente,
+          PLC: '',
+          Placa: '',
+          SKU: o.sku,
+          Kg: o.kg,
+          Operario: o.operator,
+          Eficiencia: eficiencia,
+          'Tiempo alistamiento': o.time_spent ?? '',
+          'Fecha despacho': '',
+          'Tiempo cargue': '',
+          'Kg despachados': o.despachado_kg,
+          'Días retraso': diasRetraso,
+        });
+      } else {
+        for (const d of despachos) {
+          registros.push({
+            Semana: semana,
+            Fecha: o.date,
+            Cliente: o.cliente,
+            PLC: d.plc,
+            Placa: d.placa,
+            SKU: o.sku,
+            Kg: o.kg,
+            Operario: o.operator,
+            Eficiencia: eficiencia,
+            'Tiempo alistamiento': o.time_spent ?? '',
+            'Fecha despacho': d.created_at?.slice(0, 10) ?? '',
+            'Tiempo cargue': d.cargue_time,
+            'Kg despachados': d.kg,
+            'Días retraso': diasRetraso,
+          });
+        }
+      }
+    }
+
+    const wsReg = XLSX.utils.json_to_sheet(registros);
+    wsReg['!cols'] = [
+      { wch: 8 }, { wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 14 },
+      { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 10 },
+      { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+      { wch: 12 },
+    ];
+    applyHeaderStyle(wsReg);
+    XLSX.utils.book_append_sheet(wb, wsReg, 'Registros');
+
+    // ─── Sheet 2: Descargues ───
     try {
       const allUnloadings = await getUnloadings();
       if (allUnloadings.length > 0) {
@@ -174,32 +212,25 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         }));
         const wsUnc = XLSX.utils.json_to_sheet(uncData);
         wsUnc['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
-        const uncRange = XLSX.utils.decode_range(wsUnc['!ref'] || 'A1:A1');
-        for (let c = uncRange.s.c; c <= uncRange.e.c; c++) {
-          const addr = XLSX.utils.encode_cell({ r: 0, c });
-          if (wsUnc[addr]) wsUnc[addr].s = EXCEL_HEADER_STYLE;
-        }
+        applyHeaderStyle(wsUnc);
         XLSX.utils.book_append_sheet(wb, wsUnc, 'Descargues');
       }
-    } catch { /* ignore errors loading unloadings */ }
+    } catch {}
 
-    // ─── Sheet: Resumen ───
+    // ─── Sheet 3: Resumen ───
     const totalOrders = orders.length;
     const totalKg = orders.reduce((s, o) => s + o.kg, 0);
     const completed = orders.filter(o => o.status === 'completed' || o.status === 'despachado');
     const avgEff = completed.length > 0 ? completed.reduce((s, o) => s + (o.efficiency ?? 0), 0) / completed.length : 0;
     const avgKgph = completed.length > 0 ? completed.reduce((s, o) => s + (o.kg_per_hour ?? 0), 0) / completed.length : 0;
     let totalHours = 0;
-    for (const o of completed) {
-      const m = o.time_spent?.match(/(\d+)h\s*(\d+)m/);
-      if (m) totalHours += parseInt(m[1]) + parseInt(m[2]) / 60;
-    }
+    for (const o of completed) totalHours += parseHours(o.time_spent);
 
-    const opMap = new Map<string, { kg: number; count: number }>();
+    const opMap = new Map<string, { kg: number; count: number; sumEff: number }>();
     const tpMap = new Map<string, { kg: number; count: number }>();
     for (const o of orders) {
-      const op = opMap.get(o.operator || 'Sin asignar') ?? { kg: 0, count: 0 };
-      op.kg += o.kg; op.count++; opMap.set(o.operator || 'Sin asignar', op);
+      const op = opMap.get(o.operator || 'Sin asignar') ?? { kg: 0, count: 0, sumEff: 0 };
+      op.kg += o.kg; op.count++; op.sumEff += o.efficiency ?? 0; opMap.set(o.operator || 'Sin asignar', op);
       const tp = tpMap.get(o.type) ?? { kg: 0, count: 0 };
       tp.kg += o.kg; tp.count++; tpMap.set(o.type, tp);
     }
@@ -212,12 +243,16 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       { Indicador: 'Total de horas', Valor: totalHours.toFixed(2) },
       { Indicador: '', Valor: '' },
       { Indicador: 'Producción por operario', Valor: '' },
-      ...Array.from(opMap.entries()).map(([op, d]) => ({ Indicador: op, Valor: `${d.kg} kg (${d.count} pedidos)` })),
+      ...Array.from(opMap.entries()).map(([op, d]) => ({
+        Indicador: op,
+        Valor: `${d.kg} kg (${d.count} pedidos) · Efic: ${(d.sumEff / d.count).toFixed(2)}%`,
+      })),
       { Indicador: '', Valor: '' },
-      { Indicador: 'Producción por tipo de pedido', Valor: '' },
+      { Indicador: 'Producción por tipo', Valor: '' },
       ...Array.from(tpMap.entries()).map(([tp, d]) => ({ Indicador: tp, Valor: `${d.kg} kg (${d.count} pedidos)` })),
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summary);
+    applyHeaderStyle(wsSummary);
     XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
 
     const wbArray = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -234,6 +269,36 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     await clearAllData();
     onDelete();
     load();
+  }
+
+  async function handleDeleteByDateRange() {
+    setPasswordAction({
+      title: 'Limpiar por rango de fechas',
+      message: `Se eliminarán los pedidos, despachos y descargues desde ${deleteStartDate} hasta ${deleteEndDate}. ¿Continuar?`,
+      action: async () => {
+        await deleteOrdersByDateRange(deleteStartDate, deleteEndDate);
+        setShowDateDelete(false);
+        setDeleteStartDate('');
+        setDeleteEndDate('');
+        setDeleteWeek('');
+        onDelete();
+        load();
+      },
+    });
+  }
+
+  function handleWeekChange(week: string) {
+    setDeleteWeek(week);
+    if (!week) return;
+    const year = new Date().getFullYear();
+    const firstJan = new Date(year, 0, 1);
+    const days = (parseInt(week) - 1) * 7;
+    const start = new Date(firstJan);
+    start.setDate(firstJan.getDate() + days - firstJan.getDay() + 1);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    setDeleteStartDate(start.toISOString().split('T')[0]);
+    setDeleteEndDate(end.toISOString().split('T')[0]);
   }
 
   const filtered = useMemo(() => {
@@ -320,8 +385,56 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
             <Download className="w-3.5 h-3.5" />
             D/L + Limpiar
           </button>
+          <button onClick={() => setShowDateDelete(true)}
+            className="inline-flex items-center gap-1 bg-red-100 text-red-700 px-2.5 py-1.5 rounded-md text-xs font-medium hover:bg-red-200">
+            <Trash className="w-3.5 h-3.5" />
+            Limpiar por fecha
+          </button>
         </div>
       </div>
+
+      {showDateDelete && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40">
+          <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-xl w-full sm:max-w-md">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h2 className="text-base font-semibold text-gray-900">Eliminar por rango de fechas</h2>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Semana</label>
+                  <input type="number" min="1" max="53" value={deleteWeek} onChange={e => handleWeekChange(e.target.value)}
+                    placeholder="Ej: 28"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <span className="text-xs text-gray-400 mt-5">o</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Fecha inicio</label>
+                  <input type="date" value={deleteStartDate} onChange={e => { setDeleteStartDate(e.target.value); setDeleteWeek(''); }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Fecha fin</label>
+                  <input type="date" value={deleteEndDate} onChange={e => { setDeleteEndDate(e.target.value); setDeleteWeek(''); }}
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div className="flex gap-3 justify-end pt-1">
+                <button onClick={() => { setShowDateDelete(false); setDeleteStartDate(''); setDeleteEndDate(''); setDeleteWeek(''); }}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200">
+                  Cancelar
+                </button>
+                <button onClick={handleDeleteByDateRange} disabled={!deleteStartDate || !deleteEndDate}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50">
+                  Eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
         {/* Desktop table */}

@@ -2,20 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { Truck, Package, Search, CheckCircle, AlertTriangle } from 'lucide-react';
 import { getOrdersForDispatch, getDespachos, createDespacho } from '../api';
 import type { Order, Despacho } from '../types';
-import { getToday } from '../utils';
+import { getOverdueDays } from '../utils';
 import DispatchModal from './DispatchModal';
 
 function isOverdue(order: Order): boolean {
-  const today = getToday();
-  if (order.type === 'Masivo') {
-    // Masivo: debe despacharse el mismo día
-    return order.date < today;
-  }
-  // Venta Directa: debe despacharse al día siguiente
-  const d = new Date(order.date);
-  d.setDate(d.getDate() + 1);
-  const nextDay = d.toISOString().split('T')[0];
-  return nextDay < today;
+  return getOverdueDays(order.date, order.type) > 0;
 }
 
 export default function DispatchView() {
@@ -83,12 +74,14 @@ export default function DispatchView() {
     <div className="space-y-3">
       {/* ── Overdue alert ── */}
       {(() => {
-        const overdue = pendingOrders.filter(isOverdue).length;
-        return overdue > 0 ? (
+        const overdue = pendingOrders.filter(isOverdue);
+        const totalDays = overdue.reduce((s, o) => s + getOverdueDays(o.date, o.type), 0);
+        return overdue.length > 0 ? (
           <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
             <p className="text-xs text-red-700">
-              <strong>{overdue}</strong> pedido{overdue !== 1 ? 's' : ''} con retraso
+              <strong>{overdue.length}</strong> pedido{overdue.length !== 1 ? 's' : ''} con retraso
+              {totalDays > 0 && <span> — <strong>{totalDays}</strong> día{totalDays !== 1 ? 's' : ''} en total</span>}
             </p>
           </div>
         ) : null;
@@ -131,7 +124,14 @@ export default function DispatchView() {
                   <div className="flex items-center gap-2 min-w-0">
                     {isOverdue(order) && <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />}
                     <div>
-                      <h3 className="font-semibold text-gray-900">{order.cliente}</h3>
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        {order.cliente}
+                        {isOverdue(order) && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">
+                            {getOverdueDays(order.date, order.type)} día{getOverdueDays(order.date, order.type) !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </h3>
                       <p className="text-xs text-gray-500">
                         SKU: {order.sku} · {order.kg} kg · {order.type}
                         {order.despachado_kg > 0 && ` · Op: ${order.operator}`}

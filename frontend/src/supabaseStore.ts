@@ -4,7 +4,7 @@ import type { Order, RegisterOrderData, OrderFormData, DashboardData, Statistics
 function getCurrentUser(): string {
   return localStorage.getItem('current_user') || '';
 }
-import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime } from './utils';
+import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueEfficiency, calculateDescargueEfficiency, calculateCargueTime, parseTimeSpentToHours } from './utils';
 
 function mapOrder(row: any): Order {
   return {
@@ -263,13 +263,15 @@ export async function getDashboard(params: { period?: string; date?: string } = 
   const despKg = despachos.reduce((s, d) => s + d.kg, 0);
   const despVehiculos = despachos.length;
   const despRutas = new Set(despachos.map(d => d.ruta).filter(Boolean)).size;
+  const despHours = despachos.reduce((s, d) => s + parseTimeSpentToHours(d.cargue_time), 0);
+  const despKgPerHour = despHours > 0 ? despKg / despHours : 0;
+  const despEfficiency = calculateCargueEfficiency(despKgPerHour);
 
   const uncKg = unloadings.reduce((s, u) => s + u.kg, 0);
   const uncPtm = unloadings.length;
-  const uncHours = unloadings.reduce((s, u) => {
-    const m = u.time_spent?.match(/(\d+)h\s*(\d+)m/);
-    return m ? s + parseInt(m[1]) + parseInt(m[2]) / 60 : s;
-  }, 0);
+  const uncHours = unloadings.reduce((s, u) => s + parseTimeSpentToHours(u.time_spent), 0);
+  const uncKgPerHour = uncHours > 0 ? uncKg / uncHours : 0;
+  const uncEfficiency = calculateDescargueEfficiency(uncKgPerHour);
 
   return {
     total_orders: totalOrders, total_kg: totalKg,
@@ -287,8 +289,16 @@ export async function getDashboard(params: { period?: string; date?: string } = 
       type, total_kg: d.total_kg, total_orders: d.total_orders,
       avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
     })),
-    despachos: { total_kg: despKg, total_vehiculos: despVehiculos, total_rutas: despRutas },
-    descargues: { total_kg: uncKg, total_ptm: uncPtm, total_hours: Math.round(uncHours * 100) / 100 },
+    despachos: {
+      total_kg: despKg, total_vehiculos: despVehiculos, total_rutas: despRutas,
+      avg_kg_per_hour: Math.round(despKgPerHour * 100) / 100,
+      avg_efficiency: Math.round(despEfficiency * 100) / 100,
+    },
+    descargues: {
+      total_kg: uncKg, total_ptm: uncPtm, total_hours: Math.round(uncHours * 100) / 100,
+      avg_kg_per_hour: Math.round(uncKgPerHour * 100) / 100,
+      avg_efficiency: Math.round(uncEfficiency * 100) / 100,
+    },
   };
 }
 
@@ -518,4 +528,13 @@ export async function clearAllData(): Promise<void> {
   await getSupabase().from('unloadings').delete().neq('id', 0);
   const { error } = await getSupabase().from('orders').delete().neq('id', 0);
   if (error) throw new Error(error.message);
+}
+
+export async function deleteOrdersByDateRange(startDate: string, endDate: string): Promise<void> {
+  const { data: ordersToDelete } = await getSupabase().from('orders').select('id').gte('date', startDate).lte('date', endDate);
+  if (ordersToDelete && ordersToDelete.length > 0) {
+    const ids = ordersToDelete.map(o => o.id);
+    await getSupabase().from('despachos').delete().in('order_id', ids);
+    await getSupabase().from('orders').delete().in('id', ids);
+  }
 }
