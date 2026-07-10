@@ -269,6 +269,7 @@ export default function PendingOrders({ onCompleted, onAssignOperator }: Props) 
                     <span className="flex items-center gap-1"><User className="w-3.5 h-3.5" /> {order.operator}</span>
                     <span>Inicio: {order.start_time}</span>
                     <span className="font-mono"><ElapsedTime start={order.start_time} /></span>
+                    {order.created_by && <span className="text-gray-400">Creado: {order.created_by}</span>}
                   </div>
                   <button onClick={() => handleFinalize(order)} disabled={finalizing === order.id}
                     className="w-full inline-flex items-center justify-center gap-2 bg-green-600 text-white py-3 rounded-lg text-base font-medium hover:bg-green-700 disabled:opacity-50">
@@ -287,6 +288,7 @@ export default function PendingOrders({ onCompleted, onAssignOperator }: Props) 
                     </span>
                     <span className="text-gray-500 shrink-0">{order.start_time}</span>
                     <span className="text-gray-700 shrink-0 font-mono text-xs"><ElapsedTime start={order.start_time} /></span>
+                    {order.created_by && <span className="text-gray-400 shrink-0 text-[10px]">Creado: {order.created_by}</span>}
                     <span className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
                       order.type === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
                     }`}>

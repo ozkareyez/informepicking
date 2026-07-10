@@ -75,13 +75,15 @@ export default function DispatchView() {
       {/* ── Overdue alert ── */}
       {(() => {
         const overdue = pendingOrders.filter(isOverdue);
-        const totalDays = overdue.reduce((s, o) => s + getOverdueDays(o.date, o.type), 0);
+        const d1 = overdue.filter(o => getOverdueDays(o.date, o.type) === 1).length;
+        const many = overdue.length - d1;
         return overdue.length > 0 ? (
           <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
             <p className="text-xs text-red-700">
               <strong>{overdue.length}</strong> pedido{overdue.length !== 1 ? 's' : ''} con retraso
-              {totalDays > 0 && <span> — <strong>{totalDays}</strong> día{totalDays !== 1 ? 's' : ''} en total</span>}
+              {d1 > 0 && <span> · 1 día: <strong>{d1}</strong></span>}
+              {many > 0 && <span> · 2+ días: <strong>{many}</strong></span>}
             </p>
           </div>
         ) : null;
@@ -135,6 +137,7 @@ export default function DispatchView() {
                       <p className="text-xs text-gray-500">
                         SKU: {order.sku} · {order.kg} kg · {order.type}
                         {order.despachado_kg > 0 && ` · Op: ${order.operator}`}
+                        {order.created_by && <span> · Creado: {order.created_by}</span>}
                       </p>
                     </div>
                   </div>
@@ -206,6 +209,7 @@ export default function DispatchView() {
                           <CheckCircle className="w-4 h-4 text-green-600" />
                           <span className="font-medium text-green-900 text-sm">{order.cliente}</span>
                           <span className="text-xs text-green-700">{order.kg} kg</span>
+                          {order.created_by && <span className="text-xs text-green-500">Creado: {order.created_by}</span>}
                         </div>
                         {despachos.map(d => (
                           <div key={d.id} className="text-xs text-green-700 pl-6 flex flex-wrap gap-x-3">

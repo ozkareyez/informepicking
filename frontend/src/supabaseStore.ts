@@ -214,7 +214,7 @@ function applyDateFilter(query: any, period: string | undefined, date: string | 
 }
 
 export async function getDashboard(params: { period?: string; date?: string } = {}): Promise<DashboardData> {
-  let orderQuery = getSupabase().from('orders').select('*').eq('status', 'completed');
+  let orderQuery = getSupabase().from('orders').select('*').in('status', ['completed', 'despachado']);
   orderQuery = applyDateFilter(orderQuery, params.period, params.date);
   const { data: orderData, error: orderError } = await orderQuery;
   if (orderError) throw new Error(orderError.message);
@@ -303,7 +303,7 @@ export async function getDashboard(params: { period?: string; date?: string } = 
 }
 
 export async function getStatistics(params: { operator?: string; period?: string; date?: string } = {}): Promise<StatisticsData> {
-  let query = getSupabase().from('orders').select('*').eq('status', 'completed');
+  let query = getSupabase().from('orders').select('*').in('status', ['completed', 'despachado']);
 
   if (params.operator) query = query.eq('operator', params.operator);
   if (params.period && params.date) {
@@ -360,7 +360,7 @@ export async function getStatistics(params: { operator?: string; period?: string
 }
 
 export async function getOrdersForDispatch(): Promise<Order[]> {
-  const { data, error } = await getSupabase().from('orders').select('*').eq('status', 'completed');
+  const { data, error } = await getSupabase().from('orders').select('*').in('status', ['completed', 'despachado']);
   if (error) throw new Error(error.message);
   return (data || []).map(mapOrder);
 }
@@ -531,10 +531,17 @@ export async function clearAllData(): Promise<void> {
 }
 
 export async function deleteOrdersByDateRange(startDate: string, endDate: string): Promise<void> {
-  const { data: ordersToDelete } = await getSupabase().from('orders').select('id').gte('date', startDate).lte('date', endDate);
+  const { data: ordersToDelete, error: selectError } = await getSupabase().from('orders').select('id').gte('date', startDate).lte('date', endDate);
+  if (selectError) throw new Error(`Error al buscar pedidos: ${selectError.message}`);
+
   if (ordersToDelete && ordersToDelete.length > 0) {
     const ids = ordersToDelete.map(o => o.id);
-    await getSupabase().from('despachos').delete().in('order_id', ids);
-    await getSupabase().from('orders').delete().in('id', ids);
+    const { error: despError } = await getSupabase().from('despachos').delete().in('order_id', ids);
+    if (despError) throw new Error(`Error al eliminar despachos: ${despError.message}`);
+    const { error: ordError } = await getSupabase().from('orders').delete().in('id', ids);
+    if (ordError) throw new Error(`Error al eliminar pedidos: ${ordError.message}`);
   }
+
+  const { error: uncError } = await getSupabase().from('unloadings').delete().gte('date', startDate).lte('date', endDate);
+  if (uncError) throw new Error(`Error al eliminar descargues: ${uncError.message}`);
 }

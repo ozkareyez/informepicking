@@ -152,12 +152,14 @@ CREATE TABLE usuarios (
 
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Todos pueden leer usuarios" ON usuarios FOR SELECT USING (true);
+CREATE POLICY "Todos pueden insertar usuarios" ON usuarios FOR INSERT WITH CHECK (true);
 
 -- Usuarios iniciales
 INSERT INTO usuarios (username, password) VALUES
   ('william', '2026'),
   ('dumar', '1996'),
-  ('oscar', '0220');
+  ('oscar', '0220'),
+  ('cesar', '0000');
 
 -- ============================================================
 -- 🔗 Agregar created_by a pedidos, despachos y descargues

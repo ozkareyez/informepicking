@@ -45,7 +45,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
-  const [passwordAction, setPasswordAction] = useState<{ title: string; message: string; action: () => void } | null>(null);
+  const [passwordAction, setPasswordAction] = useState<{ title: string; message: string; action: () => Promise<void> } | null>(null);
   const [showDateDelete, setShowDateDelete] = useState(false);
   const [deleteStartDate, setDeleteStartDate] = useState('');
   const [deleteEndDate, setDeleteEndDate] = useState('');
@@ -626,7 +626,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         <PasswordModal
           title={passwordAction.title}
           message={passwordAction.message}
-          onConfirm={() => { passwordAction.action(); setPasswordAction(null); }}
+          onConfirm={async () => { await passwordAction.action(); setPasswordAction(null); }}
           onCancel={() => setPasswordAction(null)}
         />
       )}

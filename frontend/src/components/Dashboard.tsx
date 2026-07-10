@@ -54,7 +54,8 @@ export default function Dashboard() {
   const [date, setDate] = useState(getToday());
   const [activeTab, setActiveTab] = useState<TabId>('produccion');
   const [overdueCount, setOverdueCount] = useState(0);
-  const [overdueDays, setOverdueDays] = useState(0);
+  const [overdue1d, setOverdue1d] = useState(0);
+  const [overdueMany, setOverdueMany] = useState(0);
 
   useEffect(() => {
     load();
@@ -69,14 +70,14 @@ export default function Dashboard() {
       // Calculate overdue stats from pending dispatch orders
       try {
         const pending = await getOrdersForDispatch();
-        let count = 0;
-        let days = 0;
+        let count = 0, d1 = 0, many = 0;
         for (const o of pending) {
           const od = getOverdueDays(o.date, o.type);
-          if (od > 0) { count++; days += od; }
+          if (od > 0) { count++; if (od === 1) d1++; else many++; }
         }
         setOverdueCount(count);
-        setOverdueDays(days);
+        setOverdue1d(d1);
+        setOverdueMany(many);
       } catch {}
     } catch {
       console.error('Error loading dashboard');
@@ -283,7 +284,7 @@ export default function Dashboard() {
             <KpiCard icon={Truck} label="Vehículos cargados" value={String(data.despachos.total_vehiculos)} color="bg-blue-600" />
             <KpiCard icon={MapPin} label="Rutas diferentes" value={String(data.despachos.total_rutas)} color="bg-purple-600" />
             <KpiCard icon={Gauge} label="Eficiencia cargue" value={formatEfficiency(data.despachos.avg_efficiency)} color="bg-purple-600" />
-            <KpiCard icon={AlertTriangle} label="Pedidos con retraso" value={`${overdueCount} (${overdueDays} días)`} color="bg-red-600" />
+            <KpiCard icon={AlertTriangle} label="Pedidos con retraso" value={`${overdueCount}`} color="bg-red-600" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
@@ -337,10 +338,16 @@ export default function Dashboard() {
 
             <div className="bg-red-50 rounded-xl border border-red-200 p-4">
               <h3 className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-2">Retrasos</h3>
-              <p className="text-3xl font-bold text-red-900">{overdueCount}</p>
-              <p className="text-xs text-red-500 mt-1">
-                {overdueDays > 0 ? `${overdueDays} días de retraso acumulados` : 'Sin retrasos'}
-              </p>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-red-700">1 día</span>
+                  <span className="font-bold text-red-900 text-lg">{overdue1d}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-red-700">2+ días</span>
+                  <span className="font-bold text-red-900 text-lg">{overdueMany}</span>
+                </div>
+              </div>
             </div>
           </div>
         </div>

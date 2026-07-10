@@ -4,7 +4,7 @@ import { Lock, X } from 'lucide-react';
 interface Props {
   title: string;
   message: string;
-  onConfirm: () => void | Promise<void>;
+  onConfirm: () => Promise<void>;
   onCancel: () => void;
 }
 
@@ -14,10 +14,10 @@ export default function PasswordModal({ title, message, onConfirm, onCancel }: P
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (password === CLEAR_PASSWORD) {
-      onConfirm();
+      await onConfirm();
     } else {
       setError('Contraseña incorrecta');
       setPassword('');
