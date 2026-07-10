@@ -1,3 +1,9 @@
+export interface User {
+  id: number;
+  username: string;
+  created_at: string;
+}
+
 export interface Order {
   id: number;
   date: string;
@@ -18,6 +24,7 @@ export interface Order {
   cargue_end: string | null;
   cargue_time: string | null;
   despachado_kg: number;
+  created_by: string;
   created_at: string;
 }
 
@@ -31,6 +38,7 @@ export interface Despacho {
   cargue_start: string;
   cargue_end: string;
   cargue_time: string;
+  created_by: string;
   created_at: string;
 }
 
@@ -102,6 +110,7 @@ export interface Unloading {
   start_time: string;
   end_time: string;
   time_spent: string | null;
+  created_by: string;
   created_at: string;
 }
 

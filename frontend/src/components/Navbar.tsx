@@ -1,10 +1,12 @@
-import { Package, LayoutDashboard, ClipboardList, BarChart3, Timer, Truck, Container, Users } from 'lucide-react';
+import { Package, LayoutDashboard, ClipboardList, BarChart3, Timer, Truck, Container, Users, LogOut } from 'lucide-react';
+import { useAuth } from '../auth';
 
 interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   pendingCount: number;
   unassignedCount: number;
+  user: string;
 }
 
 const tabs = [
@@ -18,7 +20,9 @@ const tabs = [
   { id: 'estadisticas', label: 'Estadísticas', icon: BarChart3 },
 ];
 
-export default function Navbar({ activeTab, setActiveTab, pendingCount, unassignedCount }: NavbarProps) {
+export default function Navbar({ activeTab, setActiveTab, pendingCount, unassignedCount, user }: NavbarProps) {
+  const { logout } = useAuth();
+
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6">
@@ -28,6 +32,16 @@ export default function Navbar({ activeTab, setActiveTab, pendingCount, unassign
             <span className="text-sm font-bold text-gray-900 hidden sm:block">
               Control de Productividad
             </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-gray-500 hidden sm:inline">
+              <span className="font-medium text-gray-700">{user}</span>
+            </span>
+            <button onClick={logout}
+              className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+              title="Cerrar sesión">
+              <LogOut className="w-4 h-4" />
+            </button>
           </div>
           <div className="flex space-x-0.5 sm:space-x-1 overflow-x-auto">
             {tabs.map((tab) => {

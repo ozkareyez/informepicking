@@ -242,6 +242,7 @@ export default function UnloadingView() {
                         {u.time_spent}
                       </span>
                     )}
+                    {u.created_by && <span className="text-gray-400">Por: {u.created_by}</span>}
                   </div>
                 </div>
                 <button onClick={() => handleDelete(u.id)}

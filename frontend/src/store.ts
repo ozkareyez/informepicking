@@ -75,6 +75,7 @@ export async function createDespacho(orderId: number, data: {
     cargue_start: data.cargue_start,
     cargue_end: data.cargue_end,
     cargue_time,
+    created_by: localStorage.getItem('current_user') || '',
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
   };
   despachos.push(despacho);
@@ -174,6 +175,7 @@ export async function createOrder(data: RegisterOrderData): Promise<Order> {
     cargue_end: null,
     cargue_time: null,
     despachado_kg: 0,
+    created_by: localStorage.getItem('current_user') || '',
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
   };
   orders.push(order);
@@ -450,6 +452,7 @@ export async function createUnloading(data: UnloadingFormData): Promise<Unloadin
     start_time: data.start_time,
     end_time: data.end_time,
     time_spent: calculateTimeSpent(data.start_time, data.end_time),
+    created_by: localStorage.getItem('current_user') || '',
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
   };
   unloadings.push(unloading);

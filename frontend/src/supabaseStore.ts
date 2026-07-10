@@ -1,5 +1,9 @@
 import { getSupabase } from './supabase';
-import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator } from './types';
+import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User } from './types';
+
+function getCurrentUser(): string {
+  return localStorage.getItem('current_user') || '';
+}
 import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime } from './utils';
 
 function mapOrder(row: any): Order {
@@ -23,6 +27,7 @@ function mapOrder(row: any): Order {
     cargue_end: row.cargue_end ?? null,
     cargue_time: row.cargue_time ?? null,
     despachado_kg: Number(row.despachado_kg ?? 0),
+    created_by: row.created_by ?? '',
     created_at: row.created_at,
   };
 }
@@ -38,6 +43,7 @@ function mapDespacho(row: any): Despacho {
     cargue_start: row.cargue_start,
     cargue_end: row.cargue_end,
     cargue_time: row.cargue_time,
+    created_by: row.created_by ?? '',
     created_at: row.created_at,
   };
 }
@@ -98,6 +104,7 @@ export async function createOrder(data: RegisterOrderData): Promise<Order> {
     operator: '',
     start_time: '',
     status: 'sin_operario',
+    created_by: getCurrentUser(),
   }).select().single();
   if (error) throw new Error(error.message);
   return mapOrder(row);
@@ -394,6 +401,7 @@ export async function createDespacho(orderId: number, data: {
     cargue_start: data.cargue_start,
     cargue_end: data.cargue_end,
     cargue_time,
+    created_by: getCurrentUser(),
   }).select().single();
   if (insertError) throw new Error(insertError.message);
 
@@ -430,6 +438,7 @@ function mapUnloading(row: any): Unloading {
     start_time: row.start_time ?? '',
     end_time: row.end_time ?? '',
     time_spent: row.time_spent ?? null,
+    created_by: row.created_by ?? '',
     created_at: row.created_at,
   };
 }
@@ -450,6 +459,7 @@ export async function createUnloading(data: UnloadingFormData): Promise<Unloadin
     start_time: data.start_time,
     end_time: data.end_time,
     time_spent,
+    created_by: getCurrentUser(),
   }).select().single();
   if (error) throw new Error(error.message);
   return mapUnloading(row);
@@ -491,6 +501,17 @@ export async function deleteOperator(id: number): Promise<void> {
 }
 
 // ─── Limpiar ────────────────────────────────────────────────────
+
+// ─── Autenticación ───────────────────────────────────────────────
+
+export async function login(username: string, password: string): Promise<User | null> {
+  const { data, error } = await getSupabase().from('usuarios').select('id, username, created_at')
+    .eq('username', username)
+    .eq('password', password)
+    .single();
+  if (error || !data) return null;
+  return { id: data.id, username: data.username, created_at: data.created_at };
+}
 
 export async function clearAllData(): Promise<void> {
   await getSupabase().from('despachos').delete().neq('id', 0);

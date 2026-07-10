@@ -176,6 +176,7 @@ export default function DispatchView() {
                         <span>{d.kg} kg</span>
                         <span>Cargue: {d.cargue_time}</span>
                         {d.ruta && <span className="text-blue-600">Ruta: {d.ruta}</span>}
+                        {d.created_by && <span className="text-gray-400">Por: {d.created_by}</span>}
                       </div>
                     ))}
                   </div>
@@ -212,6 +213,7 @@ export default function DispatchView() {
                             <span>PLC: {d.plc}</span>
                             <span>{d.kg} kg</span>
                             {d.ruta && <span>Ruta: {d.ruta}</span>}
+                            {d.created_by && <span>Por: {d.created_by}</span>}
                           </div>
                         ))}
                       </div>

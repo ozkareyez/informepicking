@@ -139,3 +139,29 @@ ALTER TABLE operators ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Todos pueden leer operators" ON operators FOR SELECT USING (true);
 CREATE POLICY "Todos pueden insertar operators" ON operators FOR INSERT WITH CHECK (true);
 CREATE POLICY "Todos pueden eliminar operators" ON operators FOR DELETE USING (true);
+
+-- ============================================================
+-- 👤 Usuarios del sistema (para tracking de quién hace qué)
+-- ============================================================
+CREATE TABLE usuarios (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  username TEXT NOT NULL UNIQUE,
+  password TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Todos pueden leer usuarios" ON usuarios FOR SELECT USING (true);
+
+-- Usuarios iniciales
+INSERT INTO usuarios (username, password) VALUES
+  ('william', '2026'),
+  ('dumar', '1996'),
+  ('oscar', '0220');
+
+-- ============================================================
+-- 🔗 Agregar created_by a pedidos, despachos y descargues
+-- ============================================================
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT '';
+ALTER TABLE despachos ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT '';
+ALTER TABLE unloadings ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT '';

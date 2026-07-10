@@ -10,10 +10,14 @@ import EditOrderModal from './components/EditOrderModal';
 import DispatchView from './components/DispatchView';
 import UnloadingView from './components/UnloadingView';
 import OperatorView from './components/OperatorView';
+import LoginScreen from './components/LoginScreen';
+import ThirtyMinuteAlert from './components/ThirtyMinuteAlert';
+import { useAuth } from './auth';
 import { createOrder, assignOperator, updateOrder, getPendingOrders, getUnassignedOrders } from './api';
 import type { Order } from './types';
 
 export default function App() {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -83,9 +87,11 @@ export default function App() {
     triggerRefresh();
   }
 
+  if (!user) return <LoginScreen />;
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} pendingCount={pendingCount} unassignedCount={unassignedCount} />
+      <Navbar activeTab={activeTab} setActiveTab={setActiveTab} pendingCount={pendingCount} unassignedCount={unassignedCount} user={user} />
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-3">
         {activeTab === 'dashboard' && <Dashboard />}
@@ -123,6 +129,7 @@ export default function App() {
         />
       )}
 
+      <ThirtyMinuteAlert />
       <ToastContainer />
     </div>
   );

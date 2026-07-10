@@ -1,4 +1,4 @@
-import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator } from './types';
+import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User } from './types';
 import * as supabaseStore from './supabaseStore';
 
 const active = supabaseStore;
@@ -69,6 +69,12 @@ export async function dispatchOrder(id: number, data: {
 
 export async function clearAllData(): Promise<void> {
   return active.clearAllData();
+}
+
+// ─── Autenticación ─────────────────────────────────────────────
+
+export async function login(username: string, password: string): Promise<User | null> {
+  return active.login(username, password);
 }
 
 // ─── Despachos ──────────────────────────────────────────────────

@@ -9,6 +9,7 @@ const EXCEL_COL_WIDTHS = [
   { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
   { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 16 },
   { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
+  { wch: 14 },
 ];
 
 const EXCEL_HEADER_STYLE = {
@@ -100,6 +101,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       'Tipo de pedido': o.type,
       'Kg despachado': o.despachado_kg,
       Estado: o.status === 'despachado' ? 'Despachado' : o.status === 'completed' ? 'Completado' : o.status === 'pending' ? 'En progreso' : 'Sin operario',
+      'Creado por': o.created_by || '',
     }));
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
@@ -342,6 +344,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                 <SortHeader column="placa">Placa</SortHeader>
                 <SortHeader column="cargue_time">Cargue</SortHeader>
                 <SortHeader column="status">Estado</SortHeader>
+                <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Creado por</th>
                 <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Acción</th>
               </tr>
             </thead>
@@ -394,6 +397,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                         {order.status === 'despachado' ? 'Desp' : order.status === 'completed' ? 'Comp' : order.status === 'pending' ? 'Prog' : 'Sin Op'}
                       </span>
                     </td>
+                    <td className="px-2 py-1.5 text-xs text-gray-500">{order.created_by || '-'}</td>
                     <td className="px-2 py-1.5 text-xs">
                       <div className="flex items-center gap-1">
                         <button onClick={() => onEdit(order)}
@@ -466,6 +470,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                   {order.plc && <span>PLC:{order.plc}</span>}
                   {order.placa && <span>Placa:{order.placa}</span>}
                   {order.cargue_time && <span>Cargue:{order.cargue_time}</span>}
+                  {order.created_by && <span className="text-gray-400">Por: {order.created_by}</span>}
                   <span className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium ${
                     order.status === 'despachado' ? 'bg-green-100 text-green-800' : order.status === 'completed' ? 'bg-blue-100 text-blue-800' : order.status === 'pending' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
                   }`}>
