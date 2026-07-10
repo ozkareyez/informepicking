@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Truck, Package, Search, CheckCircle, AlertTriangle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Truck, Package, Search, CheckCircle, AlertTriangle, Calendar } from 'lucide-react';
 import { getOrdersForDispatch, getDespachos, createDespacho } from '../api';
 import type { Order, Despacho } from '../types';
-import { getOverdueDays } from '../utils';
+import { getOverdueDays, getToday, getWeekRange, getWeekNumber } from '../utils';
 import DispatchModal from './DispatchModal';
 
 function isOverdue(order: Order): boolean {
   return getOverdueDays(order.date, order.type) > 0;
 }
+
+type Period = '' | 'day' | 'week' | 'month';
+type TypeTab = 'Masivo' | 'Venta Directa';
 
 export default function DispatchView() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -16,6 +19,13 @@ export default function DispatchView() {
   const [search, setSearch] = useState('');
   const [dispatchOrder, setDispatchOrder] = useState<Order | null>(null);
   const [showFullyDispatched, setShowFullyDispatched] = useState(false);
+  const [period, setPeriod] = useState<Period>('');
+  const [date, setDate] = useState(getToday());
+  const [weekInput, setWeekInput] = useState('');
+  const [deleteWeek, setDeleteWeek] = useState('');
+  const [deleteStartDate, setDeleteStartDate] = useState('');
+  const [deleteEndDate, setDeleteEndDate] = useState('');
+  const [typeTab, setTypeTab] = useState<TypeTab>('Masivo');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,10 +64,32 @@ export default function DispatchView() {
     load();
   }
 
-  const pendingOrders = orders.filter(o => o.despachado_kg < o.kg);
-  const doneOrders = orders.filter(o => o.despachado_kg >= o.kg);
+  const filteredByDate = useMemo(() => {
+    if (!period) return orders;
+    if (period === 'day') return orders.filter(o => o.date === date);
+    if (period === 'week') {
+      const { start, end } = getWeekRange(parseInt(weekInput), new Date(date).getFullYear());
+      return orders.filter(o => o.date >= start && o.date <= end);
+    }
+    if (period === 'month') {
+      const prefix = date.slice(0, 7);
+      return orders.filter(o => o.date.startsWith(prefix));
+    }
+    return orders;
+  }, [orders, period, date, weekInput]);
 
-  const filteredPending = pendingOrders.filter(o => {
+  const pendingOrders = filteredByDate.filter(o => o.despachado_kg < o.kg);
+  const doneOrders = filteredByDate.filter(o => o.despachado_kg >= o.kg);
+
+  const pendingMasivo = pendingOrders.filter(o => o.type === 'Masivo');
+  const pendingVd = pendingOrders.filter(o => o.type === 'Venta Directa');
+  const doneMasivo = doneOrders.filter(o => o.type === 'Masivo');
+  const doneVd = doneOrders.filter(o => o.type === 'Venta Directa');
+
+  const currentPending = typeTab === 'Masivo' ? pendingMasivo : pendingVd;
+  const currentDone = typeTab === 'Masivo' ? doneMasivo : doneVd;
+
+  const filteredPending = currentPending.filter(o => {
     if (search && !o.cliente.toLowerCase().includes(search.toLowerCase()) && !o.sku.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
@@ -70,43 +102,110 @@ export default function DispatchView() {
     );
   }
 
+  function handleWeekChange(week: string) {
+    setDeleteWeek(week);
+    if (!week) return;
+    const year = new Date().getFullYear();
+    const firstJan = new Date(year, 0, 1);
+    const days = (parseInt(week) - 1) * 7;
+    const start = new Date(firstJan);
+    start.setDate(firstJan.getDate() + days - firstJan.getDay() + 1);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    setDeleteStartDate(start.toISOString().split('T')[0]);
+    setDeleteEndDate(end.toISOString().split('T')[0]);
+  }
+
+  const overdue = pendingOrders.filter(isOverdue);
+  const d1 = overdue.filter(o => getOverdueDays(o.date, o.type) === 1).length;
+  const many = overdue.length - d1;
+
   return (
     <div className="space-y-3">
       {/* ── Overdue alert ── */}
-      {(() => {
-        const overdue = pendingOrders.filter(isOverdue);
-        const d1 = overdue.filter(o => getOverdueDays(o.date, o.type) === 1).length;
-        const many = overdue.length - d1;
-        return overdue.length > 0 ? (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
-            <p className="text-xs text-red-700">
-              <strong>{overdue.length}</strong> pedido{overdue.length !== 1 ? 's' : ''} con retraso
-              {d1 > 0 && <span> · 1 día: <strong>{d1}</strong></span>}
-              {many > 0 && <span> · 2+ días: <strong>{many}</strong></span>}
-            </p>
-          </div>
-        ) : null;
-      })()}
+      {overdue.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+          <p className="text-xs text-red-700">
+            <strong>{overdue.length}</strong> pedido{overdue.length !== 1 ? 's' : ''} con retraso
+            {d1 > 0 && <span> · 1 día: <strong>{d1}</strong></span>}
+            {many > 0 && <span> · 2+ días: <strong>{many}</strong></span>}
+          </p>
+        </div>
+      )}
 
-      {/* ── Search ── */}
+      {/* ── Period filter ── */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex-1 min-w-[160px] relative">
+          <button onClick={() => { setPeriod(''); setWeekInput(''); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium ${!period ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Todo</button>
+          <button onClick={() => { setPeriod('day'); setDate(getToday()); setWeekInput(''); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium ${period === 'day' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Hoy</button>
+          <button onClick={() => {
+            setPeriod('week');
+            const wn = getWeekNumber(getToday());
+            setWeekInput(String(wn));
+            handleWeekChange(String(wn));
+          }}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium ${period === 'week' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Semana</button>
+          <button onClick={() => { setPeriod('month'); setDate(getToday()); setWeekInput(''); }}
+            className={`px-2.5 py-1 rounded-md text-xs font-medium ${period === 'month' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Mes</button>
+
+          <div className="flex-1 min-w-[140px] relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <input type="text" placeholder="Buscar pedido..." value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-8 pr-2.5 py-1.5 rounded-md border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500" />
           </div>
-          <span className="text-xs text-gray-500">
-            {filteredPending.length} pendiente{filteredPending.length !== 1 ? 's' : ''}
-            {doneOrders.length > 0 && ` · ${doneOrders.length} completado${doneOrders.length !== 1 ? 's' : ''}`}
-          </span>
         </div>
+
+        {period === 'week' && (
+          <div className="flex items-center gap-2 mt-2">
+            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <input type="number" min="1" max="53" value={weekInput} onChange={e => { setWeekInput(e.target.value); handleWeekChange(e.target.value); setPeriod('week'); }}
+              placeholder="Semana"
+              className="w-20 rounded-md border border-gray-300 px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500" />
+            {deleteStartDate && deleteEndDate && (
+              <span className="text-xs text-gray-500">{deleteStartDate} → {deleteEndDate}</span>
+            )}
+          </div>
+        )}
+
+        {period === 'day' && (
+          <div className="flex items-center gap-2 mt-2">
+            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <input type="date" value={date} onChange={e => setDate(e.target.value)}
+              className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500" />
+          </div>
+        )}
+
+        {period === 'month' && (
+          <div className="flex items-center gap-2 mt-2">
+            <Calendar className="w-3.5 h-3.5 text-gray-400" />
+            <input type="month" value={date.slice(0, 7)} onChange={e => setDate(e.target.value + '-01')}
+              className="rounded-md border border-gray-300 px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500" />
+          </div>
+        )}
       </div>
 
-      {/* ── Pending orders (with saldo) ── */}
-      {filteredPending.length === 0 && doneOrders.length === 0 ? (
+      {/* ── Type tabs ── */}
+      <div className="flex gap-1">
+        <button onClick={() => setTypeTab('Masivo')}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            typeTab === 'Masivo' ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}>
+          Masivo {pendingMasivo.length > 0 && <span className="ml-1 text-xs opacity-80">({pendingMasivo.length})</span>}
+        </button>
+        <button onClick={() => setTypeTab('Venta Directa')}
+          className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+            typeTab === 'Venta Directa' ? 'bg-purple-600 text-white shadow-sm' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+          }`}>
+          Venta Directa {pendingVd.length > 0 && <span className="ml-1 text-xs opacity-80">({pendingVd.length})</span>}
+        </button>
+      </div>
+
+      {/* ── Pending orders ── */}
+      {filteredPending.length === 0 && currentDone.length === 0 ? (
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 text-center text-gray-500">
           <Truck className="w-8 h-8 mx-auto mb-2 text-gray-300" />
           <p className="text-sm">No hay pedidos pendientes de despachar</p>
@@ -121,7 +220,6 @@ export default function DispatchView() {
               <div key={order.id} className={`rounded-lg shadow-sm border p-4 ${
                 isOverdue(order) ? 'bg-red-50 border-red-300' : 'bg-white border-gray-100'
               }`}>
-                {/* Order header */}
                 <div className="flex items-start justify-between gap-2 mb-3">
                   <div className="flex items-center gap-2 min-w-0">
                     {isOverdue(order) && <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />}
@@ -139,6 +237,7 @@ export default function DispatchView() {
                         {order.despachado_kg > 0 && ` · Op: ${order.operator}`}
                         {order.created_by && <span> · Creado: {order.created_by}</span>}
                       </p>
+                      <p className="text-xs text-gray-400 mt-0.5">Fecha pedido: {order.date}</p>
                     </div>
                   </div>
                   <button onClick={() => setDispatchOrder(order)}
@@ -148,7 +247,6 @@ export default function DispatchView() {
                   </button>
                 </div>
 
-                {/* Progress bar */}
                 <div className="space-y-1">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Despachado</span>
@@ -165,7 +263,6 @@ export default function DispatchView() {
                   </div>
                 </div>
 
-                {/* Vehicles */}
                 {despachos.length > 0 && (
                   <div className="mt-3 bg-gray-50 rounded-md p-2 space-y-1">
                     <p className="text-xs font-medium text-gray-500">
@@ -188,20 +285,20 @@ export default function DispatchView() {
             );
           })}
 
-          {/* ── Fully dispatched orders ── */}
-          {doneOrders.length > 0 && (
+          {/* ── Fully dispatched ── */}
+          {currentDone.length > 0 && (
             <div>
               <button onClick={() => setShowFullyDispatched(!showFullyDispatched)}
                 className="w-full flex items-center justify-between px-3 py-2 bg-green-50 rounded-lg border border-green-200 text-sm">
                 <span className="font-medium text-green-800">
                   <CheckCircle className="w-4 h-4 inline mr-1" />
-                  Despachos completados ({doneOrders.length})
+                  Despachos completados ({currentDone.length})
                 </span>
                 <span className="text-green-600">{showFullyDispatched ? '▲' : '▼'}</span>
               </button>
               {showFullyDispatched && (
                 <div className="mt-1.5 space-y-1.5">
-                  {doneOrders.map(order => {
+                  {currentDone.map(order => {
                     const despachos = despachosMap[order.id] || [];
                     return (
                       <div key={order.id} className="bg-green-50 rounded-lg border border-green-200 p-3 space-y-1">
@@ -211,6 +308,7 @@ export default function DispatchView() {
                           <span className="text-xs text-green-700">{order.kg} kg</span>
                           {order.created_by && <span className="text-xs text-green-500">Creado: {order.created_by}</span>}
                         </div>
+                        <p className="text-xs text-green-500 pl-6">Fecha pedido: {order.date}</p>
                         {despachos.map(d => (
                           <div key={d.id} className="text-xs text-green-700 pl-6 flex flex-wrap gap-x-3">
                             <span>Placa: {d.placa}</span>
