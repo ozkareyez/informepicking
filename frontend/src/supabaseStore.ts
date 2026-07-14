@@ -710,15 +710,10 @@ export async function getRacks(): Promise<Rack[]> {
 }
 
 export async function createRack(data: RackFormData): Promise<Rack> {
-  const disponible = data.posiciones - data.ocupacion;
-  const porcentaje = data.posiciones > 0 ? Math.round((data.ocupacion / data.posiciones) * 10000) / 100 : 0;
-
   const { data: rack, error } = await getSupabase().from('racks').insert({
     codigo: data.codigo.toUpperCase(),
     posiciones: data.posiciones,
     ocupacion: data.ocupacion,
-    disponible,
-    porcentaje_ocupacion: porcentaje,
     updated_by: getCurrentUser(),
   }).select().single();
   if (error) throw new Error(error.message);
@@ -734,13 +729,14 @@ export async function updateRack(id: number, data: Partial<RackFormData>): Promi
     if (current) {
       const posiciones = data.posiciones ?? current.posiciones;
       const ocupacion = data.ocupacion ?? current.ocupacion;
-      const disponible = posiciones - ocupacion;
-      const porcentaje = posiciones > 0 ? Math.round((ocupacion / posiciones) * 10000) / 100 : 0;
       updateData.posiciones = posiciones;
       updateData.ocupacion = ocupacion;
-      updateData.disponible = disponible;
-      updateData.porcentaje_ocupacion = porcentaje;
+      // disponible and porcentaje_ocupacion are generated columns, don't include them
     }
+  } else {
+    // Remove calculated fields if not updating posiciones/ocupacion
+    delete updateData.disponible;
+    delete updateData.porcentaje_ocupacion;
   }
 
   const { error } = await getSupabase().from('racks').update(updateData).eq('id', id);
