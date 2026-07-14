@@ -111,6 +111,8 @@ export interface Unloading {
   start_time: string;
   end_time: string;
   time_spent: string | null;
+  novedad: string | null;
+  novedad_resuelta: boolean;
   created_by: string;
   created_at: string;
 }
@@ -122,4 +124,33 @@ export interface UnloadingFormData {
   operators: string[];
   start_time: string;
   end_time: string;
+  novedad?: string;
+}
+
+export interface CitaCargue {
+  id: number;
+  ruta: string;
+  placa: string;
+  kg: number;
+  tipo: 'Masivo' | 'Venta Directa';
+  hora_cita: string;
+  hora_llegada: string | null;
+  retraso_minutos: number | null;
+  cumplio_cita: boolean | null;
+  observaciones: string | null;
+  ruta_cargada: boolean;
+  plc: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface CitaCargueFormData {
+  ruta: string;
+  placa: string;
+  kg: number;
+  tipo: 'Masivo' | 'Venta Directa';
+  hora_cita: string;
+  hora_llegada?: string | null;
+  cumplio_cita?: boolean | null;
+  observaciones?: string;
 }

@@ -12,7 +12,7 @@ function isOverdue(order: Order): boolean {
 type Period = '' | 'day' | 'week' | 'month';
 type TypeTab = 'Masivo' | 'Venta Directa';
 
-export default function DispatchView() {
+export default function DispatchView({ onOrderChange }: { onOrderChange?: () => void }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [despachosMap, setDespachosMap] = useState<Record<number, Despacho[]>>({});
   const [loading, setLoading] = useState(true);
@@ -63,6 +63,7 @@ export default function DispatchView() {
     await createDespacho(orderId, data);
     setDispatchOrder(null);
     load();
+    onOrderChange?.();
   }
 
   const filteredByDate = useMemo(() => {
@@ -79,8 +80,8 @@ export default function DispatchView() {
     return orders;
   }, [orders, period, date, weekInput]);
 
-  const pendingOrders = filteredByDate.filter(o => o.despachado_kg < o.kg);
-  const doneOrders = filteredByDate.filter(o => o.despachado_kg >= o.kg);
+  const pendingOrders = filteredByDate.filter(o => (o.despachado_kg ?? 0) < o.kg);
+  const doneOrders = filteredByDate.filter(o => (o.despachado_kg ?? 0) >= o.kg);
 
   const pendingMasivo = pendingOrders.filter(o => o.type === 'Masivo');
   const pendingVd = pendingOrders.filter(o => o.type === 'Venta Directa');
@@ -99,6 +100,14 @@ export default function DispatchView() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+  if (!loading && orders.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 text-center text-gray-500">
+        <Truck className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+        <p className="text-sm">No hay pedidos pendientes de despachar</p>
       </div>
     );
   }
@@ -276,7 +285,11 @@ export default function DispatchView() {
                         <span>PLC: {d.plc}</span>
                         <span>{d.kg} kg</span>
                         <span>Cargue: {d.cargue_time}</span>
+                        <span>Inicio: {d.cargue_start}</span>
+                        <span>Fin: {d.cargue_end}</span>
                         {d.ruta && <span className="text-blue-600">Ruta: {d.ruta}</span>}
+                        {d.date && <span>Fecha: {d.date}</span>}
+                        {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
                         {d.created_by && <span className="text-gray-400">Por: {d.created_by}</span>}
                       </div>
                     ))}
@@ -310,15 +323,20 @@ export default function DispatchView() {
                           {order.created_by && <span className="text-xs text-green-500">Creado: {order.created_by}</span>}
                         </div>
                         <p className="text-xs text-green-500 pl-6">Fecha pedido: {order.date}</p>
-                        {despachos.map(d => (
-                          <div key={d.id} className="text-xs text-green-700 pl-6 flex flex-wrap gap-x-3">
-                            <span>Placa: {d.placa}</span>
-                            <span>PLC: {d.plc}</span>
-                            <span>{d.kg} kg</span>
-                            {d.ruta && <span>Ruta: {d.ruta}</span>}
-                            {d.created_by && <span>Por: {d.created_by}</span>}
-                          </div>
-                        ))}
+{despachos.map(d => (
+                            <div key={d.id} className="text-xs text-green-700 pl-6 flex flex-wrap gap-x-3 gap-y-0.5">
+                              <span>Placa: <strong>{d.placa}</strong></span>
+                              <span>PLC: {d.plc}</span>
+                              <span>{d.kg} kg</span>
+                              <span>Cargue: {d.cargue_time}</span>
+                              <span>Inicio: {d.cargue_start}</span>
+                              <span>Fin: {d.cargue_end}</span>
+                              {d.ruta && <span>Ruta: {d.ruta}</span>}
+                              {d.date && <span>Fecha: {d.date}</span>}
+                              {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
+                              {d.created_by && <span>Por: {d.created_by}</span>}
+                            </div>
+                          ))}
                       </div>
                     );
                   })}

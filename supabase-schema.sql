@@ -87,6 +87,38 @@ CREATE POLICY "Todos pueden actualizar despachos" ON despachos FOR UPDATE USING 
 CREATE POLICY "Todos pueden eliminar despachos" ON despachos FOR DELETE USING (true);
 
 -- ============================================================
+-- 🚛 Citas de cargue (programación de vehículos en bodega)
+-- ============================================================
+CREATE TABLE citas_cargue (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  ruta TEXT NOT NULL DEFAULT '',
+  placa TEXT NOT NULL,
+  kg NUMERIC NOT NULL DEFAULT 0,
+  tipo TEXT NOT NULL DEFAULT 'Masivo' CHECK (tipo IN ('Masivo', 'Venta Directa')),
+  hora_cita TIME NOT NULL,
+  hora_llegada TIME,
+  retraso_minutos INT GENERATED ALWAYS AS (
+    CASE 
+      WHEN hora_llegada IS NOT NULL AND hora_cita IS NOT NULL
+      THEN EXTRACT(EPOCH FROM (hora_llegada - hora_cita)) / 60
+      ELSE NULL
+    END
+  ) STORED,
+  cumplio_cita BOOLEAN,
+  observaciones TEXT,
+  created_by TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_citas_cargue_fecha ON citas_cargue(created_at);
+
+ALTER TABLE citas_cargue ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Todos pueden leer citas_cargue" ON citas_cargue FOR SELECT USING (true);
+CREATE POLICY "Todos pueden insertar citas_cargue" ON citas_cargue FOR INSERT WITH CHECK (true);
+CREATE POLICY "Todos pueden actualizar citas_cargue" ON citas_cargue FOR UPDATE USING (true);
+CREATE POLICY "Todos pueden eliminar citas_cargue" ON citas_cargue FOR DELETE USING (true);
+
+-- ============================================================
 -- 🔗 Agregar despachado_kg a pedidos
 -- ============================================================
 ALTER TABLE orders ADD COLUMN despachado_kg NUMERIC DEFAULT 0;
@@ -167,4 +199,32 @@ INSERT INTO usuarios (username, password) VALUES
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT '';
 ALTER TABLE despachos ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT '';
 ALTER TABLE unloadings ADD COLUMN IF NOT EXISTS created_by TEXT DEFAULT '';
+ALTER TABLE unloadings ADD COLUMN IF NOT EXISTS novedad TEXT DEFAULT '';
+ALTER TABLE unloadings ADD COLUMN IF NOT EXISTS novedad_resuelta BOOLEAN DEFAULT false;
 ALTER TABLE despachos ADD COLUMN IF NOT EXISTS date DATE DEFAULT CURRENT_DATE;
+
+-- ============================================================
+-- 📅 Citas de cargue (programación de vehículos para cargar)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS citas_cargue (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  ruta TEXT NOT NULL DEFAULT '',
+  placa TEXT NOT NULL,
+  kg NUMERIC NOT NULL DEFAULT 0,
+  tipo TEXT NOT NULL DEFAULT 'Masivo' CHECK (tipo IN ('Masivo', 'Venta Directa')),
+  hora_cita TIME NOT NULL,
+  hora_llegada TIME,
+  retraso_minutos INT,
+  cumplio_cita BOOLEAN,
+  observaciones TEXT,
+  created_by TEXT DEFAULT '',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_citas_cargue_fecha ON citas_cargue(created_at);
+
+ALTER TABLE citas_cargue ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Todos pueden leer citas_cargue" ON citas_cargue FOR SELECT USING (true);
+CREATE POLICY "Todos pueden insertar citas_cargue" ON citas_cargue FOR INSERT WITH CHECK (true);
+CREATE POLICY "Todos pueden actualizar citas_cargue" ON citas_cargue FOR UPDATE USING (true);
+CREATE POLICY "Todos pueden eliminar citas_cargue" ON citas_cargue FOR DELETE USING (true);

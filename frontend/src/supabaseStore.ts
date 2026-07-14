@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User } from './types';
+import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData } from './types';
 
 function getCurrentUser(): string {
   return localStorage.getItem('current_user') || '';
@@ -111,6 +111,24 @@ export async function createOrder(data: RegisterOrderData): Promise<Order> {
   return mapOrder(row);
 }
 
+export async function createOrders(items: RegisterOrderData[]): Promise<number> {
+  if (items.length === 0) return 0;
+  const rows = items.map(d => ({
+    date: d.date,
+    cliente: d.cliente,
+    sku: d.sku,
+    kg: d.kg,
+    type: d.type,
+    operator: '',
+    start_time: '',
+    status: 'sin_operario' as const,
+    created_by: getCurrentUser(),
+  }));
+  const { error } = await getSupabase().from('orders').insert(rows);
+  if (error) throw new Error(error.message);
+  return items.length;
+}
+
 export async function assignOperator(id: number, operator: string, start_time: string): Promise<Order> {
   const { data: row, error } = await getSupabase().from('orders').update({
     operator,
@@ -215,11 +233,13 @@ function applyDateFilter(query: any, period: string | undefined, date: string | 
 }
 
 export async function getDashboard(params: { period?: string; date?: string } = {}): Promise<DashboardData> {
+  console.log('🔍 getDashboard called with params:', params);
   let orderQuery = getSupabase().from('orders').select('*').in('status', ['completed', 'despachado']);
   orderQuery = applyDateFilter(orderQuery, params.period, params.date);
   const { data: orderData, error: orderError } = await orderQuery;
   if (orderError) throw new Error(orderError.message);
   const completed = (orderData || []).map(mapOrder);
+  console.log('📦 Orders fetched:', completed.length, completed);
 
   let despQuery = getSupabase().from('despachos').select('*');
   if (params.period && params.date) {
@@ -228,11 +248,13 @@ export async function getDashboard(params: { period?: string; date?: string } = 
   }
   const { data: despData } = await despQuery;
   const despachos = (despData || []).map(mapDespacho);
+  console.log('🚚 Despachos fetched:', despachos.length, despachos);
 
   let uncQuery = getSupabase().from('unloadings').select('*');
   uncQuery = applyDateFilter(uncQuery, params.period, params.date);
   const { data: uncData } = await uncQuery;
   const unloadings = (uncData || []).map(mapUnloading);
+  console.log('📦 Unloadings fetched:', unloadings.length, unloadings);
 
   const totalOrders = completed.length;
   const totalKg = completed.reduce((s, o) => s + o.kg, 0);
@@ -361,7 +383,7 @@ export async function getStatistics(params: { operator?: string; period?: string
 }
 
 export async function getOrdersForDispatch(): Promise<Order[]> {
-  const { data, error } = await getSupabase().from('orders').select('*').in('status', ['completed', 'despachado']);
+  const { data, error } = await getSupabase().from('orders').select('*').eq('status', 'completed');
   if (error) throw new Error(error.message);
   return (data || []).map(mapOrder);
 }
@@ -451,6 +473,8 @@ function mapUnloading(row: any): Unloading {
     start_time: row.start_time ?? '',
     end_time: row.end_time ?? '',
     time_spent: row.time_spent ?? null,
+    novedad: row.novedad ?? null,
+    novedad_resuelta: row.novedad_resuelta ?? false,
     created_by: row.created_by ?? '',
     created_at: row.created_at,
   };
@@ -472,10 +496,20 @@ export async function createUnloading(data: UnloadingFormData): Promise<Unloadin
     start_time: data.start_time,
     end_time: data.end_time,
     time_spent,
+    novedad: data.novedad || null,
+    novedad_resuelta: false,
     created_by: getCurrentUser(),
   }).select().single();
   if (error) throw new Error(error.message);
   return mapUnloading(row);
+}
+
+export async function updateUnloadingNovedad(id: number, novedad: string, resuelta: boolean): Promise<void> {
+  const { error } = await getSupabase().from('unloadings').update({
+    novedad,
+    novedad_resuelta: resuelta,
+  }).eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteUnloading(id: number): Promise<void> {
@@ -547,4 +581,109 @@ export async function deleteOrdersByDateRange(startDate: string, endDate: string
 
   const { error: uncError } = await getSupabase().from('unloadings').delete().gte('date', startDate).lte('date', endDate);
   if (uncError) throw new Error(`Error al eliminar descargues: ${uncError.message}`);
+}
+// ─── Citas de cargue ─────────────────────────────────────────────
+
+function mapCitaCargue(row: any): CitaCargue {
+  return {
+    id: row.id,
+    ruta: row.ruta,
+    placa: row.placa,
+    kg: row.kg,
+    tipo: row.tipo,
+    hora_cita: row.hora_cita,
+    hora_llegada: row.hora_llegada,
+    retraso_minutos: row.retraso_minutos,
+    cumplio_cita: row.cumplio_cita,
+    ruta_cargada: row.ruta_cargada,
+    plc: row.plc,
+    observaciones: row.observaciones,
+    created_by: row.created_by ?? '',
+    created_at: row.created_at,
+  };
+}
+
+export async function getCitasCargue(): Promise<CitaCargue[]> {
+  const { data, error } = await getSupabase().from('citas_cargue').select('*').order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data || []).map(mapCitaCargue);
+}
+
+export async function createCitaCargue(data: CitaCargueFormData): Promise<CitaCargue> {
+  // Calculate delay if arrival time is provided
+  let retraso_minutos = null;
+  let cumplio_cita = null;
+  if (data.hora_llegada && data.hora_cita) {
+    const [citaH, citaM] = data.hora_cita.split(':').map(Number);
+    const [llegH, llegM] = data.hora_llegada.split(':').map(Number);
+    const citaMin = citaH * 60 + citaM;
+    const llegMin = llegH * 60 + llegM;
+    retraso_minutos = llegMin - citaMin;
+    cumplio_cita = retraso_minutos <= 0;
+  }
+
+  const { data: row, error } = await getSupabase().from('citas_cargue').insert({
+    ruta: data.ruta,
+    placa: data.placa,
+    kg: data.kg,
+    tipo: data.tipo,
+    hora_cita: data.hora_cita,
+    hora_llegada: data.hora_llegada ?? null,
+    retraso_minutos,
+    cumplio_cita,
+    observaciones: data.observaciones ?? null,
+    created_by: getCurrentUser(),
+  }).select().single();
+  if (error) throw new Error(error.message);
+  return mapCitaCargue(row);
+}
+
+export async function updateCitaCargue(id: number, data: Partial<CitaCargueFormData>): Promise<void> {
+  const updateData: any = {};
+  if (data.ruta !== undefined) updateData.ruta = data.ruta;
+  if (data.placa !== undefined) updateData.placa = data.placa;
+  if (data.kg !== undefined) updateData.kg = data.kg;
+  if (data.tipo !== undefined) updateData.tipo = data.tipo;
+  if (data.hora_cita !== undefined) updateData.hora_cita = data.hora_cita;
+  if (data.hora_llegada !== undefined) updateData.hora_llegada = data.hora_llegada;
+  if (data.cumplio_cita !== undefined) updateData.cumplio_cita = data.cumplio_cita;
+  if (data.observaciones !== undefined) updateData.observaciones = data.observaciones;
+  if (data.plc !== undefined) updateData.plc = data.plc;
+  if (data.ruta_cargada !== undefined) updateData.ruta_cargada = data.ruta_cargada;
+
+  // Calculate delay if arrival time and appointment time are provided
+  if (data.hora_llegada && data.hora_cita) {
+    const [citaH, citaM] = data.hora_cita.split(':').map(Number);
+    const [llegH, llegM] = data.hora_llegada.split(':').map(Number);
+    const citaMin = citaH * 60 + citaM;
+    const llegMin = llegH * 60 + llegM;
+    updateData.retraso_minutos = llegMin - citaMin;
+    updateData.cumplio_cita = updateData.retraso_minutos <= 0;
+  } else if (data.hora_llegada && updateData.hora_cita) {
+    const [citaH, citaM] = updateData.hora_cita.split(':').map(Number);
+    const [llegH, llegM] = data.hora_llegada.split(':').map(Number);
+    const citaMin = citaH * 60 + citaM;
+    const llegMin = llegH * 60 + llegM;
+    updateData.retraso_minutos = llegMin - citaMin;
+    updateData.cumplio_cita = updateData.retraso_minutos <= 0;
+  } else if (data.hora_llegada && !updateData.hora_cita) {
+    // Need to fetch existing hora_cita
+    const { data: existing } = await getSupabase().from('citas_cargue').select('hora_cita').eq('id', id).single();
+    if (existing?.hora_cita) {
+      const [citaH, citaM] = existing.hora_cita.split(':').map(Number);
+      const [llegH, llegM] = data.hora_llegada.split(':').map(Number);
+      const citaMin = citaH * 60 + citaM;
+      const llegMin = llegH * 60 + llegM;
+      updateData.retraso_minutos = llegMin - citaMin;
+      updateData.cumplio_cita = updateData.retraso_minutos <= 0;
+    }
+  }
+
+  const { error } = await getSupabase().from('citas_cargue').update(updateData).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteCitaCargue(id: number): Promise<void> {
+  const { error } = await getSupabase().from('citas_cargue').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }

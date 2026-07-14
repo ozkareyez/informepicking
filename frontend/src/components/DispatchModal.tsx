@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
-import { X, Truck, Save, Package, MapPin } from 'lucide-react';
-import type { Order, Despacho } from '../types';
+import { useState, useMemo, useEffect } from 'react';
+import { X, Truck, Save, Package, MapPin, AlertTriangle } from 'lucide-react';
+import type { Order, Despacho, CitaCargue } from '../types';
 import { getCurrentTime, calculateCargueTime, getToday } from '../utils';
 
 interface Props {
@@ -16,22 +16,35 @@ interface Props {
     ruta: string;
   }) => Promise<void>;
   onClose: () => void;
+  cita?: CitaCargue | null;
 }
 
-export default function DispatchModal({ order, despachos, onSave, onClose }: Props) {
+export default function DispatchModal({ order, despachos, onSave, onClose, cita }: Props) {
   const saldo = order.kg - order.despachado_kg;
   const existingRuta = despachos.length > 0 ? despachos[0].ruta : '';
+  const citaRuta = cita?.ruta || '';
+  const citaPlaca = cita?.placa || '';
+  const citaKg = cita?.kg || 0;
 
-  const defaultRuta = existingRuta || (despachos.length === 0 ? order.cliente : '');
+  const defaultRuta = existingRuta || (despachos.length === 0 ? (citaRuta || order.cliente) : '');
   const [ruta, setRuta] = useState(defaultRuta);
-  const [placa, setPlaca] = useState('');
+  const [placa, setPlaca] = useState(citaPlaca);
   const [plc, setPlc] = useState('');
-  const [kg, setKg] = useState(saldo > 0 ? String(saldo) : '');
+  const [kg, setKg] = useState(citaKg > 0 ? String(citaKg) : (saldo > 0 ? String(saldo) : ''));
   const [date, setDate] = useState(getToday());
   const [cargueStart, setCargueStart] = useState('');
   const [cargueEnd, setCargueEnd] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  // Update form when cita changes
+  useEffect(() => {
+    if (cita) {
+      setRuta(cita.ruta || defaultRuta);
+      setPlaca(cita.placa || '');
+      setKg(String(cita.kg || saldo));
+    }
+  }, [cita, defaultRuta, saldo]);
 
   const kgNum = parseFloat(kg) || 0;
   const cargueTimePreview =

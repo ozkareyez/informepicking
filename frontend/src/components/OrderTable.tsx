@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Search, ArrowUpDown, Edit, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, Trash, User, Truck, Download } from 'lucide-react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Search, ArrowUpDown, Edit, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, Trash, User, Truck, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { getOrders, deleteOrder, clearAllData, deleteOrdersByDateRange, getAllDespachos, getUnloadings } from '../api';
 import type { Order, Despacho, Unloading } from '../types';
 import { calculateKgPerHour, calculateEfficiency, getOverdueDays, getWeekNumber } from '../utils';
@@ -50,6 +50,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
   const [deleteStartDate, setDeleteStartDate] = useState('');
   const [deleteEndDate, setDeleteEndDate] = useState('');
   const [deleteWeek, setDeleteWeek] = useState('');
+  const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
+  const [despachosMap, setDespachosMap] = useState<Record<number, Despacho[]>>({});
 
   useEffect(() => {
     load();
@@ -60,6 +62,15 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     try {
       const data = await getOrders({ cliente, date, type, status: statusFilter || undefined, sortBy, sortOrder });
       setOrders(data);
+
+      // Load despachos for all orders
+      const dMap: Record<number, Despacho[]> = {};
+      const allDespachos = await getAllDespachos();
+      for (const d of allDespachos) {
+        if (!dMap[d.order_id]) dMap[d.order_id] = [];
+        dMap[d.order_id].push(d);
+      }
+      setDespachosMap(dMap);
     } catch {
       console.error('Error loading orders');
     } finally {
@@ -209,9 +220,11 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
           'Hora inicio': u.start_time,
           'Hora final': u.end_time,
           'Tiempo descargue': u.time_spent ?? '',
+          Novedad: u.novedad ?? '',
+          'Novedad resuelta': u.novedad_resuelta ? 'Sí' : 'No',
         }));
         const wsUnc = XLSX.utils.json_to_sheet(uncData);
-        wsUnc['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 14 }];
+        wsUnc['!cols'] = [{ wch: 12 }, { wch: 16 }, { wch: 10 }, { wch: 24 }, { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 30 }, { wch: 14 }];
         applyHeaderStyle(wsUnc);
         XLSX.utils.book_append_sheet(wb, wsUnc, 'Descargues');
       }
@@ -303,11 +316,21 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
 
   const filtered = useMemo(() => {
     let result = orders;
-    if (cliente) result = result.filter(o => o.cliente.toLowerCase().includes(cliente.toLowerCase()));
+    if (cliente) {
+      const search = cliente.toLowerCase();
+      result = result.filter(o => {
+        const despachos = despachosMap[o.id] || [];
+        const plcs = despachos.map(d => d.plc).filter(Boolean).join(' ').toLowerCase();
+        const placas = despachos.map(d => d.placa).filter(Boolean).join(' ').toLowerCase();
+        return o.cliente.toLowerCase().includes(search) ||
+               plcs.includes(search) ||
+               placas.includes(search);
+      });
+    }
     if (date) result = result.filter(o => o.date === date);
     if (type) result = result.filter(o => o.type === type);
     return result;
-  }, [orders, cliente, date, type]);
+  }, [orders, cliente, date, type, despachosMap]);
 
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -332,7 +355,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex-1 min-w-[140px] relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input type="text" placeholder="Buscar cliente..." value={cliente}
+            <input type="text" placeholder="Buscar cliente, placa o PLC..." value={cliente}
               onChange={e => { setCliente(e.target.value); setPage(0); }}
               className="w-full pl-8 pr-2.5 py-1.5 rounded-md border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500" />
           </div>
@@ -473,67 +496,114 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                   <td colSpan={16} className="px-3 py-8 text-center text-gray-500 text-sm">No hay pedidos</td>
                 </tr>
               ) : (
-                paginated.map(order => (
-                  <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-2 py-1.5 text-xs text-gray-900 whitespace-nowrap">{order.date}</td>
-                    <td className="px-2 py-1.5 text-xs font-medium text-gray-900 truncate max-w-[100px]">{order.cliente}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700">{order.sku}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700">{order.kg}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700">{order.operator}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{order.start_time}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{val(order.end_time)}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.time_spent)}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.kg_per_hour)}</td>
-                    <td className="px-2 py-1.5 text-xs">
-                      {order.efficiency != null ? (
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                          order.efficiency >= 100 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {order.efficiency.toFixed(1)}%
-                        </span>
-                      ) : '-'}
-                    </td>
-                    <td className="px-2 py-1.5 text-xs">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                        order.type === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                      }`}>
-                        {order.type === 'Masivo' ? 'M' : 'VD'}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.plc)}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.placa)}</td>
-                    <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.cargue_time)}</td>
-                    <td className="px-2 py-1.5 text-xs">
-                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                        order.status === 'despachado' ? 'bg-green-100 text-green-800' : order.status === 'completed' ? 'bg-blue-100 text-blue-800' : order.status === 'pending' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {order.status === 'despachado' ? 'Desp' : order.status === 'completed' ? 'Comp' : order.status === 'pending' ? 'Prog' : 'Sin Op'}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5 text-xs text-gray-500">{order.created_by || '-'}</td>
-                    <td className="px-2 py-1.5 text-xs">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => onEdit(order)}
-                          className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors">
-                          <Edit className="w-3 h-3" />
-                        </button>
-                        {confirmDelete === order.id ? (
-                          <div className="flex items-center gap-0.5">
-                            <button onClick={() => handleDelete(order.id)}
-                              className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded hover:bg-red-700">Sí</button>
-                            <button onClick={() => setConfirmDelete(null)}
-                              className="px-1.5 py-0.5 text-[10px] bg-gray-200 text-gray-700 rounded hover:bg-gray-300">No</button>
+                paginated.map(order => {
+                  const despachos = despachosMap[order.id] || [];
+                  const hasDespachos = despachos.length > 0;
+                  const isExpanded = expandedOrderId === order.id;
+
+                  // Aggregate dispatch info for main row display
+                  const plcs = despachos.map(d => d.plc).filter(Boolean).join(', ');
+                  const placas = despachos.map(d => d.placa).filter(Boolean).join(', ');
+                  const cargueTimes = despachos.map(d => d.cargue_time).filter(Boolean).join(', ');
+                  const rutas = [...new Set(despachos.map(d => d.ruta).filter(Boolean))].join(', ');
+                  const totalDespachadoKg = despachos.reduce((s, d) => s + d.kg, 0);
+                  const vehiculosCount = despachos.length;
+
+                  return (
+                    <>
+                      <tr key={order.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => hasDespachos && setExpandedOrderId(isExpanded ? null : order.id)}>
+                        <td className="px-2 py-1.5 text-xs text-gray-900 whitespace-nowrap">{order.date}</td>
+                        <td className="px-2 py-1.5 text-xs font-medium text-gray-900 truncate max-w-[100px]">{order.cliente}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.sku}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.kg}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.operator}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{order.start_time}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{val(order.end_time)}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.time_spent)}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.kg_per_hour)}</td>
+                        <td className="px-2 py-1.5 text-xs">
+                          {order.efficiency != null ? (
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                              order.efficiency >= 100 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                            }`}>
+                              {order.efficiency.toFixed(1)}%
+                            </span>
+                          ) : '-'}
+                        </td>
+                        <td className="px-2 py-1.5 text-xs">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                            order.type === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                          }`}>
+                            {order.type === 'Masivo' ? 'M' : 'VD'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700" title={plcs || undefined}>{plcs || val(order.plc)}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700" title={placas || undefined}>{placas || val(order.placa)}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700" title={cargueTimes || undefined}>{cargueTimes || val(order.cargue_time)}</td>
+                        <td className="px-2 py-1.5 text-xs">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                            order.status === 'despachado' ? 'bg-green-100 text-green-800' : order.status === 'completed' ? 'bg-blue-100 text-blue-800' : order.status === 'pending' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {order.status === 'despachado' ? `Desp (${vehiculosCount})` : order.status === 'completed' ? 'Comp' : order.status === 'pending' ? 'Prog' : 'Sin Op'}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-xs text-gray-500">{order.created_by || '-'}</td>
+                        <td className="px-2 py-1.5 text-xs">
+                          <div className="flex items-center gap-1">
+                            <button onClick={(e) => { e.stopPropagation(); onEdit(order); }}
+                              className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors">
+                              <Edit className="w-3 h-3" />
+                            </button>
+                            {hasDespachos && (
+                              <button onClick={(e) => { e.stopPropagation(); setExpandedOrderId(isExpanded ? null : order.id); }}
+                                className="p-1 rounded text-green-600 hover:bg-green-50 transition-colors" title={isExpanded ? 'Ocultar despachos' : 'Ver despachos'}>
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
+                            )}
+                            {confirmDelete === order.id ? (
+                              <div className="flex items-center gap-0.5">
+                                <button onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }}
+                                  className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded hover:bg-red-700">Sí</button>
+                                <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }}
+                                  className="px-1.5 py-0.5 text-[10px] bg-gray-200 text-gray-700 rounded hover:bg-gray-300">No</button>
+                              </div>
+                            ) : (
+                              <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(order.id); }}
+                                className="p-1 rounded text-red-600 hover:bg-red-50 transition-colors">
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
-                        ) : (
-                          <button onClick={() => setConfirmDelete(order.id)}
-                            className="p-1 rounded text-red-600 hover:bg-red-50 transition-colors">
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                        </td>
+                      </tr>
+                      {isExpanded && hasDespachos && (
+                        <tr>
+                          <td colSpan={16} className="px-0 py-0">
+                            <div className="bg-green-50 border-t border-green-200 p-4 space-y-3">
+                              <p className="text-xs font-medium text-green-800">Despachos ({despachos.length} vehículo{despachos.length !== 1 ? 's' : ''}) — Total: {despachos.reduce((s, d) => s + d.kg, 0)} kg</p>
+                              {despachos.map(d => (
+                                <div key={d.id} className="bg-white border border-green-200 rounded-lg p-3 space-y-1">
+                                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                    <span className="font-medium text-green-900">Placa: <span className="font-mono">{d.placa}</span></span>
+                                    <span className="text-green-700">PLC: <span className="font-mono">{d.plc}</span></span>
+                                    <span className="text-green-700"><strong>{d.kg} kg</strong></span>
+                                    <span className="text-green-700">Cargue: {d.cargue_time}</span>
+                                    <span className="text-green-700">Inicio: {d.cargue_start}</span>
+                                    <span className="text-green-700">Fin: {d.cargue_end}</span>
+                                    {d.ruta && <span className="text-blue-600">Ruta: {d.ruta}</span>}
+                                    {d.date && <span className="text-green-700">Fecha: {d.date}</span>}
+                                    {d.created_at && <span className="text-green-700">Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
+                                    {d.created_by && <span className="text-gray-500">Por: {d.created_by}</span>}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -630,6 +700,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
           onCancel={() => setPasswordAction(null)}
         />
       )}
+
     </div>
   );
 }

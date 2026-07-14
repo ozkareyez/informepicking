@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Package, Clock, Search, Trash2, User } from 'lucide-react';
-import { getUnloadings, createUnloading, deleteUnloading, getOperators } from '../api';
+import { Package, Clock, Search, Trash2, User, AlertTriangle, CheckCircle, XCircle, Edit3 } from 'lucide-react';
+import { getUnloadings, createUnloading, deleteUnloading, updateUnloadingNovedad, getOperators } from '../api';
 import type { Unloading, Operator } from '../types';
 import { getToday, getCurrentTime, calculateTimeSpent } from '../utils';
 
@@ -10,6 +10,7 @@ export default function UnloadingView() {
   const [unloadings, setUnloadings] = useState<Unloading[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [soloNovedades, setSoloNovedades] = useState(false);
 
   // Form state
   const [date, setDate] = useState(getToday());
@@ -18,9 +19,12 @@ export default function UnloadingView() {
   const [operatorsList, setOperatorsList] = useState<string[]>(Array(OP_SLOTS).fill(''));
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
+  const [hasNovedad, setHasNovedad] = useState(false);
+  const [novedad, setNovedad] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [operators, setOperators] = useState<Operator[]>([]);
+  const [editingNovedad, setEditingNovedad] = useState<{ id: number; text: string } | null>(null);
 
   const load = useCallback(async () => {
     getOperators().then(setOperators).catch(() => {});
@@ -69,12 +73,15 @@ export default function UnloadingView() {
         operators: selected,
         start_time: startTime,
         end_time: endTime,
+        novedad: hasNovedad ? novedad.trim() : undefined,
       });
       setPtm('');
       setKg('');
       setOperatorsList(Array(OP_SLOTS).fill(''));
       setStartTime('');
       setEndTime('');
+      setNovedad('');
+      setHasNovedad(false);
       load();
     } catch (err: any) {
       setError(err.message);
@@ -100,6 +107,7 @@ export default function UnloadingView() {
   }
 
   const filtered = unloadings.filter(u => {
+    if (soloNovedades && !u.novedad) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     if (u.ptm.toLowerCase().includes(q)) return true;
@@ -132,7 +140,7 @@ export default function UnloadingView() {
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Peso (kg)</label>
               <input type="number" value={kg} onChange={e => setKg(e.target.value)}
-                placeholder="Ej: 25000" min="1"
+                placeholder="Ej: 25000" min="0.01" step="0.01"
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div />
@@ -188,6 +196,26 @@ export default function UnloadingView() {
             </div>
           )}
 
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={hasNovedad} onChange={e => { setHasNovedad(e.target.checked); if (!e.target.checked) setNovedad(''); }}
+                className="rounded border-gray-300 text-orange-500 focus:ring-orange-400" />
+              <span className="text-xs font-medium text-orange-600">Novedad</span>
+            </label>
+            {hasNovedad && (
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">
+                  <AlertTriangle className="w-3 h-3 inline mr-1" />
+                  Descripción de la novedad
+                </label>
+                <textarea value={novedad} onChange={e => setNovedad(e.target.value)}
+                  placeholder="Ej: faltan 5 bultos, producto trocado, calidad deficiente..."
+                  rows={2}
+                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-orange-500 resize-none" />
+              </div>
+            )}
+          </div>
+
           {error && (
             <div className="bg-red-50 border border-red-200 rounded-md px-3 py-1.5 text-xs text-red-700">{error}</div>
           )}
@@ -200,6 +228,29 @@ export default function UnloadingView() {
         </form>
       </div>
 
+      {/* ── Novedades summary ── */}
+      {unloadings.some(u => u.novedad) && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Seguimiento de novedades</h3>
+          <div className="flex flex-wrap gap-3">
+            <div className="flex items-center gap-1.5 text-xs">
+              <span className="text-gray-500">Total:</span>
+              <span className="font-bold text-gray-900">{unloadings.filter(u => u.novedad).length}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs">
+              <CheckCircle className="w-3 h-3 text-green-600" />
+              <span className="text-gray-500">Resueltas:</span>
+              <span className="font-bold text-green-700">{unloadings.filter(u => u.novedad && u.novedad_resuelta).length}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs">
+              <AlertTriangle className="w-3 h-3 text-orange-500" />
+              <span className="text-gray-500">Pendientes:</span>
+              <span className="font-bold text-orange-700">{unloadings.filter(u => u.novedad && !u.novedad_resuelta).length}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── List ── */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-3">
         <div className="flex flex-wrap items-center gap-2 mb-3">
@@ -209,6 +260,13 @@ export default function UnloadingView() {
               onChange={e => setSearch(e.target.value)}
               className="w-full pl-8 pr-2.5 py-1.5 rounded-md border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500" />
           </div>
+          <button onClick={() => setSoloNovedades(!soloNovedades)}
+            className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${
+              soloNovedades ? 'bg-orange-100 text-orange-800 border border-orange-300' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}>
+            <AlertTriangle className="w-3 h-3" />
+            Novedades
+          </button>
           <span className="text-xs text-gray-500">{filtered.length} registro{filtered.length !== 1 ? 's' : ''}</span>
         </div>
 
@@ -224,31 +282,84 @@ export default function UnloadingView() {
         ) : (
           <div className="space-y-1.5">
             {filtered.map(u => (
-              <div key={u.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 p-3 hover:bg-gray-50">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900 text-sm">PTM: {u.ptm}</span>
-                    <span className="text-xs text-gray-500">{u.date}</span>
-                  </div>
-                  <div className="text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                    <span>{u.kg} kg</span>
-                    {u.operators.length > 0 && (
-                      <span>Ops: {u.operators.join(', ')}</span>
+              <div key={u.id} className={`rounded-lg border p-3 ${u.novedad && !u.novedad_resuelta ? 'border-orange-200 bg-orange-50/30' : 'border-gray-100 hover:bg-gray-50'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900 text-sm">PTM: {u.ptm}</span>
+                      <span className="text-xs text-gray-500">{u.date}</span>
+                      {u.novedad && (
+                        <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                          u.novedad_resuelta ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {u.novedad_resuelta ? <CheckCircle className="w-2.5 h-2.5" /> : <AlertTriangle className="w-2.5 h-2.5" />}
+                          {u.novedad_resuelta ? 'Resuelta' : 'Novedad'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500 flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                      <span>{u.kg} kg</span>
+                      {u.operators.length > 0 && (
+                        <span>Ops: {u.operators.join(', ')}</span>
+                      )}
+                      <span>{u.start_time} - {u.end_time}</span>
+                      {u.time_spent && (
+                        <span className="text-blue-600 font-medium">
+                          <Clock className="w-3 h-3 inline mr-0.5" />
+                          {u.time_spent}
+                        </span>
+                      )}
+                      {u.created_by && <span className="text-gray-400">Por: {u.created_by}</span>}
+                    </div>
+                    {u.novedad && (
+                      <div className="mt-1.5 text-xs flex items-start gap-1.5">
+                        {editingNovedad?.id === u.id ? (
+                          <div className="flex-1 flex gap-1.5">
+                            <input type="text" value={editingNovedad.text}
+                              onChange={e => setEditingNovedad({ ...editingNovedad, text: e.target.value })}
+                              className="flex-1 rounded border border-gray-300 px-2 py-1 text-xs focus:ring-2 focus:ring-blue-500" />
+                            <button onClick={async () => {
+                              await updateUnloadingNovedad(u.id, editingNovedad.text, u.novedad_resuelta);
+                              setEditingNovedad(null);
+                              load();
+                            }} className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">Guardar</button>
+                            <button onClick={() => setEditingNovedad(null)} className="px-2 py-1 text-xs bg-gray-200 rounded hover:bg-gray-300">Cancelar</button>
+                          </div>
+                        ) : (
+                          <>
+                            <span className={`${u.novedad_resuelta ? 'text-green-700 line-through' : 'text-orange-700'}`}>
+                              {u.novedad}
+                            </span>
+                            <button onClick={() => setEditingNovedad({ id: u.id, text: u.novedad || '' })}
+                              className="text-blue-500 hover:text-blue-700 shrink-0">
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                            {!u.novedad_resuelta && (
+                              <button onClick={async () => {
+                                await updateUnloadingNovedad(u.id, u.novedad || '', true);
+                                load();
+                              }} className="text-green-600 hover:text-green-800 shrink-0" title="Marcar como resuelta">
+                                <CheckCircle className="w-3 h-3" />
+                              </button>
+                            )}
+                            {u.novedad_resuelta && (
+                              <button onClick={async () => {
+                                await updateUnloadingNovedad(u.id, u.novedad || '', false);
+                                load();
+                              }} className="text-orange-500 hover:text-orange-700 shrink-0" title="Reabrir novedad">
+                                <XCircle className="w-3 h-3" />
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     )}
-                    <span>{u.start_time} - {u.end_time}</span>
-                    {u.time_spent && (
-                      <span className="text-blue-600 font-medium">
-                        <Clock className="w-3 h-3 inline mr-0.5" />
-                        {u.time_spent}
-                      </span>
-                    )}
-                    {u.created_by && <span className="text-gray-400">Por: {u.created_by}</span>}
                   </div>
+                  <button onClick={() => handleDelete(u.id)}
+                    className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 shrink-0">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
-                <button onClick={() => handleDelete(u.id)}
-                  className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50">
-                  <Trash2 className="w-4 h-4" />
-                </button>
               </div>
             ))}
           </div>

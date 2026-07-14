@@ -1,4 +1,4 @@
-import { Package, LayoutDashboard, ClipboardList, BarChart3, Timer, Truck, Container, Users, LogOut } from 'lucide-react';
+import { Package, LayoutDashboard, ClipboardList, BarChart3, Timer, Truck, Container, Users, LogOut, CalendarDays } from 'lucide-react';
 import { useAuth } from '../auth';
 
 interface NavbarProps {
@@ -14,6 +14,7 @@ const tabs = [
   { id: 'registro', label: 'Registro', icon: ClipboardList },
   { id: 'pendientes', label: 'Pendientes', icon: Timer },
   { id: 'despacho', label: 'Despacho', icon: Truck },
+  { id: 'citas', label: 'Citas Cargue', icon: CalendarDays },
   { id: 'pedidos', label: 'Pedidos', icon: Package },
   { id: 'descargue', label: 'Descargue', icon: Container },
   { id: 'operarios', label: 'Operarios', icon: Users },

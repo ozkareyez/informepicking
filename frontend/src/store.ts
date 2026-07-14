@@ -1,9 +1,10 @@
-import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator } from './types';
+import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, CitaCargue, CitaCargueFormData } from './types';
 import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime } from './utils';
 
 const STORAGE_KEY = 'pedidos_orders';
 const DESPACHOS_KEY = 'pedidos_despachos';
 const UNLOADINGS_KEY = 'pedidos_unloadings';
+const CITAS_KEY = 'pedidos_citas';
 
 function loadOrders(): Order[] {
   try {
@@ -183,6 +184,39 @@ export async function createOrder(data: RegisterOrderData): Promise<Order> {
   orders.push(order);
   saveOrders(orders);
   return order;
+}
+
+export async function createOrders(items: RegisterOrderData[]): Promise<number> {
+  const orders = loadOrders();
+  ensureNextId(orders);
+  for (const d of items) {
+    const order: Order = {
+      id: nextId++,
+      date: d.date,
+      cliente: d.cliente,
+      sku: d.sku,
+      kg: d.kg,
+      operator: '',
+      start_time: '',
+      end_time: null,
+      type: d.type,
+      status: 'sin_operario',
+      time_spent: null,
+      kg_per_hour: null,
+      efficiency: null,
+      plc: null,
+      placa: null,
+      cargue_start: null,
+      cargue_end: null,
+      cargue_time: null,
+      despachado_kg: 0,
+      created_by: localStorage.getItem('current_user') || '',
+      created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    };
+    orders.push(order);
+  }
+  saveOrders(orders);
+  return items.length;
 }
 
 export async function assignOperator(id: number, operator: string, start_time: string): Promise<Order> {
@@ -454,12 +488,23 @@ export async function createUnloading(data: UnloadingFormData): Promise<Unloadin
     start_time: data.start_time,
     end_time: data.end_time,
     time_spent: calculateTimeSpent(data.start_time, data.end_time),
+    novedad: data.novedad || null,
+    novedad_resuelta: false,
     created_by: localStorage.getItem('current_user') || '',
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
   };
   unloadings.push(unloading);
   saveUnloadings(unloadings);
   return unloading;
+}
+
+export async function updateUnloadingNovedad(id: number, novedad: string, resuelta: boolean): Promise<void> {
+  const unloadings = loadUnloadings();
+  const idx = unloadings.findIndex(u => u.id === id);
+  if (idx === -1) throw new Error('Descargue no encontrado');
+  unloadings[idx].novedad = novedad;
+  unloadings[idx].novedad_resuelta = resuelta;
+  saveUnloadings(unloadings);
 }
 
 export async function deleteUnloading(id: number): Promise<void> {
@@ -513,9 +558,101 @@ export async function deleteOperator(id: number): Promise<void> {
   saveOperators(ops);
 }
 
+// ─── Citas de cargue ──────────────────────────────────────────────
+
+function loadCitas(): CitaCargue[] {
+  try { return JSON.parse(localStorage.getItem(CITAS_KEY) || '[]'); } catch { return []; }
+}
+function saveCitas(citas: CitaCargue[]) { localStorage.setItem(CITAS_KEY, JSON.stringify(citas)); }
+let nextCitaId = 1;
+function ensureCitaIds(citas: CitaCargue[]) {
+  const max = citas.reduce((m, c) => Math.max(m, c.id), 0);
+  if (max >= nextCitaId) nextCitaId = max + 1;
+}
+
+export async function getCitasCargue(): Promise<CitaCargue[]> {
+  const citas = loadCitas();
+  ensureCitaIds(citas);
+  return citas.sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+}
+
+export async function createCitaCargue(data: CitaCargueFormData): Promise<CitaCargue> {
+  const citas = loadCitas();
+  ensureCitaIds(citas);
+  
+  const [citaH, citaM] = data.hora_cita.split(':').map(Number);
+  let retraso_minutos: number | null = null;
+  let cumplio_cita: boolean | null = null;
+  
+  if (data.hora_llegada) {
+    const [llegH, llegM] = data.hora_llegada.split(':').map(Number);
+    const citaMin = citaH * 60 + citaM;
+    const llegMin = llegH * 60 + llegM;
+    retraso_minutos = llegMin - citaMin;
+    cumplio_cita = retraso_minutos <= 15;
+  }
+
+  const cita: CitaCargue = {
+    id: nextCitaId++,
+    ruta: data.ruta,
+    placa: data.placa,
+    kg: data.kg,
+    hora_cita: data.hora_cita,
+    hora_llegada: data.hora_llegada ?? null,
+    retraso_minutos,
+    cumplio_cita,
+    observaciones: data.observaciones ?? null,
+    created_by: localStorage.getItem('current_user') || '',
+    created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+  };
+  citas.push(cita);
+  saveCitas(citas);
+  return cita;
+}
+
+export async function updateCitaCargue(id: number, data: Partial<CitaCargueFormData>): Promise<void> {
+  const citas = loadCitas();
+  const idx = citas.findIndex(c => c.id === id);
+  if (idx === -1) throw new Error('Cita no encontrada');
+  
+  const oldCita = citas[idx];
+  const hora_cita = data.hora_cita ?? oldCita.hora_cita;
+  const [citaH, citaM] = hora_cita.split(':').map(Number);
+  
+  let retraso_minutos = oldCita.retraso_minutos;
+  let cumplio_cita = oldCita.cumplio_cita;
+  
+  if (data.hora_llegada) {
+    const [llegH, llegM] = data.hora_llegada.split(':').map(Number);
+    const citaMin = citaH * 60 + citaM;
+    const llegMin = llegH * 60 + llegM;
+    retraso_minutos = llegMin - citaMin;
+    cumplio_cita = retraso_minutos <= 15;
+  }
+
+  citas[idx] = {
+    ...citas[idx],
+    ruta: data.ruta ?? oldCita.ruta,
+    placa: data.placa ?? oldCita.placa,
+    kg: data.kg ?? oldCita.kg,
+    hora_cita,
+    hora_llegada: data.hora_llegada ?? oldCita.hora_llegada,
+    retraso_minutos,
+    cumplio_cita,
+    observaciones: data.observaciones ?? oldCita.observaciones,
+  };
+  saveCitas(citas);
+}
+
+export async function deleteCitaCargue(id: number): Promise<void> {
+  const citas = loadCitas().filter(c => c.id !== id);
+  saveCitas(citas);
+}
+
 export async function clearAllData(): Promise<void> {
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(DESPACHOS_KEY);
   localStorage.removeItem(UNLOADINGS_KEY);
+  localStorage.removeItem(CITAS_KEY);
   localStorage.removeItem(OPERATORS_KEY);
 }

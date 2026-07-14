@@ -38,6 +38,10 @@ export async function createOrder(data: RegisterOrderData): Promise<Order> {
   return active.createOrder(data);
 }
 
+export async function createOrders(items: RegisterOrderData[]): Promise<number> {
+  return active.createOrders(items);
+}
+
 export async function assignOperator(id: number, operator: string, start_time: string): Promise<Order> {
   return active.assignOperator(id, operator, start_time);
 }
@@ -113,8 +117,30 @@ export async function createUnloading(data: UnloadingFormData): Promise<Unloadin
   return active.createUnloading(data);
 }
 
+export async function updateUnloadingNovedad(id: number, novedad: string, resuelta: boolean): Promise<void> {
+  return active.updateUnloadingNovedad(id, novedad, resuelta);
+}
+
 export async function deleteUnloading(id: number): Promise<void> {
   return active.deleteUnloading(id);
+}
+
+// ─── Citas de cargue ──────────────────────────────────────────────
+
+export async function getCitasCargue(): Promise<CitaCargue[]> {
+  return active.getCitasCargue();
+}
+
+export async function createCitaCargue(data: CitaCargueFormData): Promise<CitaCargue> {
+  return active.createCitaCargue(data);
+}
+
+export async function updateCitaCargue(id: number, data: Partial<CitaCargueFormData>): Promise<void> {
+  return active.updateCitaCargue(id, data);
+}
+
+export async function deleteCitaCargue(id: number): Promise<void> {
+  return active.deleteCitaCargue(id);
 }
 
 // ─── Operadores ────────────────────────────────────────────────
