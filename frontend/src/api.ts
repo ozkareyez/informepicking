@@ -1,4 +1,4 @@
-import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData } from './types';
+import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData, Rack, RackFormData } from './types';
 import * as supabaseStore from './supabaseStore';
 
 const active = supabaseStore;
@@ -159,4 +159,22 @@ export async function updateOperator(id: number, name: string): Promise<void> {
 
 export async function deleteOperator(id: number): Promise<void> {
   return active.deleteOperator(id);
+}
+
+// ─── Racks / Bodega ────────────────────────────────────────────────
+
+export async function getRacks(): Promise<Rack[]> {
+  return active.getRacks();
+}
+
+export async function createRack(data: RackFormData): Promise<Rack> {
+  return active.createRack(data);
+}
+
+export async function updateRack(id: number, data: Partial<RackFormData>): Promise<void> {
+  return active.updateRack(id, data);
+}
+
+export async function deleteRack(id: number): Promise<void> {
+  return active.deleteRack(id);
 }

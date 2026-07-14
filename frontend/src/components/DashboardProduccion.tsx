@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { getDashboard } from '../api';
 import type { DashboardData } from '../types';
-import { formatEfficiency, getToday, getWeekRange, getWeekNumber } from '../utils';
+import { formatEfficiency, getToday, getWeekRange, getWeekNumber, formatNumber } from '../utils';
 
 const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1d4ed8', '#db2777', '#f59e0b'];
 
@@ -153,8 +153,8 @@ export default function DashboardProduccion() {
             <BarChart data={data.kgByOperator}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="operator" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => formatNumber(Number(v))} />
               <Bar dataKey="total_kg" fill="#2563eb" radius={[6, 6, 0, 0]} name="Kg" />
             </BarChart>
           </ResponsiveContainer>
@@ -169,8 +169,8 @@ export default function DashboardProduccion() {
             <BarChart data={data.kgByOperator}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="operator" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} unit="%" />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 11 }} unit="%" tickFormatter={v => formatNumber(Number(v))} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), 'Eficiencia']} />
               <Bar dataKey="avg_efficiency" fill="#8b5cf6" radius={[6, 6, 0, 0]} name="Eficiencia" />
             </BarChart>
           </ResponsiveContainer>
@@ -185,9 +185,9 @@ export default function DashboardProduccion() {
             <LineChart data={data.productionByDay}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="date" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="%" />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+              <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="%" tickFormatter={v => formatNumber(Number(v))} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => [formatNumber(Number(v)), '']} />
               <Line yAxisId="left" type="monotone" dataKey="total_kg" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3, fill: '#2563eb' }} name="Kg" />
               <Line yAxisId="left" type="monotone" dataKey="total_orders" stroke="#10b981" strokeWidth={2} dot={{ r: 3, fill: '#10b981' }} name="Pedidos" />
               <Line yAxisId="right" type="monotone" dataKey="avg_efficiency" stroke="#8b5cf6" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#8b5cf6' }} name="Eficiencia %" />
@@ -206,7 +206,7 @@ export default function DashboardProduccion() {
                 data={data.productionByType}
                 cx="50%" cy="50%"
                 labelLine={false}
-                label={({ type, total_kg }) => `${type}: ${total_kg} kg`}
+                label={({ type, total_kg }) => `${type}: ${formatNumber(total_kg)} kg`}
                 outerRadius={80}
                 dataKey="total_kg" nameKey="type"
               >
@@ -214,7 +214,7 @@ export default function DashboardProduccion() {
                   <Cell key={index} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => [formatNumber(Number(v)), 'kg']} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
             </PieChart>
           </ResponsiveContainer>

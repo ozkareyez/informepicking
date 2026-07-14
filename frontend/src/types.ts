@@ -157,3 +157,20 @@ export interface CitaCargueFormData {
   ruta_cargada?: boolean;
   plc?: string | null;
 }
+
+export interface Rack {
+  id: number;
+  codigo: string;
+  posiciones: number;
+  ocupacion: number;
+  disponible: number;
+  porcentaje_ocupacion: number;
+  updated_at: string;
+  updated_by: string;
+}
+
+export interface RackFormData {
+  codigo: string;
+  posiciones: number;
+  ocupacion: number;
+}

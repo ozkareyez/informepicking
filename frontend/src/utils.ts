@@ -55,6 +55,10 @@ export function parseTimeSpentToHours(time: string | null): number {
   return m ? parseInt(m[1]) + parseInt(m[2]) / 60 : 0;
 }
 
+export function formatNumber(num: number, decimals: number = 2): string {
+  return num.toLocaleString('es-ES', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
 export function getWeekNumber(dateStr: string): number {
   const date = new Date(dateStr);
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -99,10 +103,6 @@ export function getToday(): string {
 export function getCurrentTime(): string {
   const now = new Date();
   return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-}
-
-export function formatNumber(n: number, decimals: number = 2): string {
-  return n.toLocaleString('es', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
 export function formatEfficiency(n: number): string {

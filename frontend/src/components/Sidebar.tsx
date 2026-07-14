@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Menu, X, ChevronDown, ChevronRight, Package, Truck, Container, Users, BarChart3, ClipboardList, Timer, CalendarDays, LogOut, LayoutDashboard, AlertTriangle, CheckCircle, Clock, User, Settings } from 'lucide-react';
+import { Menu, X, ChevronDown, ChevronRight, Package, Truck, Container, Users, BarChart3, ClipboardList, Timer, CalendarDays, LogOut, LayoutDashboard, AlertTriangle, CheckCircle, Clock, User, Settings, Warehouse } from 'lucide-react';
 import { useAuth } from '../auth';
 
 interface NavItem {
@@ -47,6 +47,7 @@ const CARGUE_GROUPS: NavGroup[] = [
       { id: 'dash-despacho', label: 'Despacho', icon: Truck },
       { id: 'dash-descargue', label: 'Descargue', icon: Container },
       { id: 'dash-citas', label: 'Citas / Cumplimiento', icon: CalendarDays },
+      { id: 'dash-bodega', label: 'Bodega / Ocupación', icon: Warehouse },
     ],
   },
   {

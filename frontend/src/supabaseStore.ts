@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData } from './types';
+import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData, Rack, RackFormData } from './types';
 
 function getCurrentUser(): string {
   return localStorage.getItem('current_user') || '';
@@ -685,5 +685,69 @@ export async function updateCitaCargue(id: number, data: Partial<CitaCargueFormD
 
 export async function deleteCitaCargue(id: number): Promise<void> {
   const { error } = await getSupabase().from('citas_cargue').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+// ─── Racks / Bodega ────────────────────────────────────────────────
+
+function mapRack(row: any): Rack {
+  return {
+    id: row.id,
+    codigo: row.codigo,
+    posiciones: Number(row.posiciones),
+    ocupacion: Number(row.ocupacion),
+    disponible: Number(row.disponible),
+    porcentaje_ocupacion: Number(row.porcentaje_ocupacion),
+    updated_at: row.updated_at,
+    updated_by: row.updated_by ?? '',
+  };
+}
+
+export async function getRacks(): Promise<Rack[]> {
+  const { data, error } = await getSupabase().from('racks').select('*').order('codigo', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data || []).map(mapRack);
+}
+
+export async function createRack(data: RackFormData): Promise<Rack> {
+  const disponible = data.posiciones - data.ocupacion;
+  const porcentaje = data.posiciones > 0 ? Math.round((data.ocupacion / data.posiciones) * 10000) / 100 : 0;
+
+  const { data: rack, error } = await getSupabase().from('racks').insert({
+    codigo: data.codigo.toUpperCase(),
+    posiciones: data.posiciones,
+    ocupacion: data.ocupacion,
+    disponible,
+    porcentaje_ocupacion: porcentaje,
+    updated_by: getCurrentUser(),
+  }).select().single();
+  if (error) throw new Error(error.message);
+  return mapRack(rack);
+}
+
+export async function updateRack(id: number, data: Partial<RackFormData>): Promise<void> {
+  const updateData: any = { ...data, updated_by: getCurrentUser() };
+  
+  if (data.posiciones !== undefined || data.ocupacion !== undefined) {
+    // Need to fetch current values to calculate
+    const { data: current } = await getSupabase().from('racks').select('posiciones, ocupacion').eq('id', id).single();
+    if (current) {
+      const posiciones = data.posiciones ?? current.posiciones;
+      const ocupacion = data.ocupacion ?? current.ocupacion;
+      const disponible = posiciones - ocupacion;
+      const porcentaje = posiciones > 0 ? Math.round((ocupacion / posiciones) * 10000) / 100 : 0;
+      updateData.posiciones = posiciones;
+      updateData.ocupacion = ocupacion;
+      updateData.disponible = disponible;
+      updateData.porcentaje_ocupacion = porcentaje;
+    }
+  }
+
+  const { error } = await getSupabase().from('racks').update(updateData).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteRack(id: number): Promise<void> {
+  const { error } = await getSupabase().from('racks').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }

@@ -228,3 +228,39 @@ CREATE POLICY "Todos pueden leer citas_cargue" ON citas_cargue FOR SELECT USING 
 CREATE POLICY "Todos pueden insertar citas_cargue" ON citas_cargue FOR INSERT WITH CHECK (true);
 CREATE POLICY "Todos pueden actualizar citas_cargue" ON citas_cargue FOR UPDATE USING (true);
 CREATE POLICY "Todos pueden eliminar citas_cargue" ON citas_cargue FOR DELETE USING (true);
+
+-- ============================================================
+-- 🏭 Bodega / Racks - Ocupación y disponibilidad
+-- ============================================================
+CREATE TABLE IF NOT EXISTS racks (
+  id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  codigo TEXT NOT NULL UNIQUE,        -- R1, R2, etc.
+  posiciones INT NOT NULL DEFAULT 0,  -- Total posiciones
+  ocupacion INT NOT NULL DEFAULT 0,   -- Posiciones ocupadas
+  disponible INT GENERATED ALWAYS AS (posiciones - ocupacion) STORED,
+  porcentaje_ocupacion NUMERIC GENERATED ALWAYS AS (
+    CASE WHEN posiciones > 0 THEN ROUND((ocupacion::NUMERIC / posiciones) * 100, 2) ELSE 0 END
+  ) STORED,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_by TEXT DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_racks_codigo ON racks(codigo);
+
+ALTER TABLE racks ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Todos pueden leer racks" ON racks FOR SELECT USING (true);
+CREATE POLICY "Todos pueden insertar racks" ON racks FOR INSERT WITH CHECK (true);
+CREATE POLICY "Todos pueden actualizar racks" ON racks FOR UPDATE USING (true);
+CREATE POLICY "Todos pueden eliminar racks" ON racks FOR DELETE USING (true);
+
+-- Datos iniciales de racks
+INSERT INTO racks (codigo, posiciones, ocupacion) VALUES
+  ('R1', 100, 100),
+  ('R2', 80, 80),
+  ('R3', 80, 80),
+  ('R4', 90, 80),
+  ('R5', 90, 90),
+  ('R6', 90, 90),
+  ('R7', 90, 90),
+  ('R8', 100, 100)
+ON CONFLICT (codigo) DO NOTHING;

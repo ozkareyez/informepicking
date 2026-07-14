@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import { getDashboard, getOrdersForDispatch, getDespachos } from '../api';
 import type { DashboardData, Order, Despacho } from '../types';
-import { getOverdueDays, getCargueStandardKgPerHour, formatEfficiency, getToday, getWeekRange, getWeekNumber } from '../utils';
+import { getOverdueDays, getCargueStandardKgPerHour, formatEfficiency, getToday, getWeekRange, getWeekNumber, formatNumber } from '../utils';
 
 const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1d4ed8', '#db2777', '#f59e0b'];
 
@@ -193,8 +193,8 @@ export default function DashboardDespacho() {
             <BarChart data={data.despachos.total_rutas > 0 ? [{ ruta: 'Ruta 1', kg: data.despachos.total_kg / data.despachos.total_rutas }] : []}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="ruta" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => formatNumber(Number(v))} />
               <Bar dataKey="kg" fill="#2563eb" radius={[6, 6, 0, 0]} name="Kg" />
             </BarChart>
           </ResponsiveContainer>
@@ -211,7 +211,7 @@ export default function DashboardDespacho() {
                 data={[{ ruta: 'Ruta 1', vehiculos: data.despachos.total_vehiculos / (data.despachos.total_rutas || 1) }]}
                 cx="50%" cy="50%"
                 labelLine={false}
-                label={({ ruta, vehiculos }) => `${ruta}: ${vehiculos.toFixed(1)} veh`}
+                label={({ ruta, vehiculos }) => `${ruta}: ${formatNumber(vehiculos)} veh`}
                 outerRadius={80}
                 dataKey="vehiculos" nameKey="ruta"
               >
@@ -219,7 +219,7 @@ export default function DashboardDespacho() {
                   <Cell key={index} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => formatNumber(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
             </PieChart>
           </ResponsiveContainer>
@@ -241,9 +241,9 @@ export default function DashboardDespacho() {
             ]}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="dia" tick={{ fontSize: 10 }} />
-              <YAxis yAxisId="left" tick={{ fontSize: 11 }} />
+              <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="%" />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => formatNumber(Number(v))} />
               <Line yAxisId="left" type="monotone" dataKey="eficiencia" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3, fill: '#8b5cf6' }} name="Eficiencia %" />
               <Line yAxisId="right" type="monotone" dataKey="eficiencia" stroke="#2563eb" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#2563eb' }} name="Estándar 100%" />
             </LineChart>
@@ -259,8 +259,8 @@ export default function DashboardDespacho() {
             <BarChart data={data.despachos.total_vehiculos > 0 ? [{ vehiculo: 'Promedio', kg: data.despachos.total_kg / data.despachos.total_vehiculos }] : []}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
               <XAxis dataKey="vehiculo" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), 'kg/vehículo']} />
               <Bar dataKey="kg" fill="#10b981" radius={[6, 6, 0, 0]} name="Kg/vehículo" />
             </BarChart>
           </ResponsiveContainer>

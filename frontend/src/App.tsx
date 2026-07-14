@@ -6,6 +6,7 @@ import DashboardProduccion from './components/DashboardProduccion';
 import DashboardDespacho from './components/DashboardDespacho';
 import DashboardDescargue from './components/DashboardDescargue';
 import DashboardCitas from './components/DashboardCitas';
+import DashboardBodega from './components/DashboardBodega';
 import OrderForm from './components/OrderForm';
 import PendingOrders from './components/PendingOrders';
 import OrderTable from './components/OrderTable';
@@ -130,6 +131,7 @@ export default function App() {
           {activeTab === 'dash-despacho' && <DashboardDespacho key="dash-despacho" />}
           {activeTab === 'dash-descargue' && <DashboardDescargue key="dash-descargue" />}
           {activeTab === 'dash-citas' && <DashboardCitas key="dash-citas" />}
+          {activeTab === 'dash-bodega' && <DashboardBodega key="dash-bodega" />}
           
           {/* Proceso de Cargue */}
           {activeTab === 'registro' && <OrderForm onSubmit={handleRegister} />}
