@@ -8,6 +8,8 @@ import { getDashboard, getOrdersForDispatch, getDespachos } from '../api';
 import type { DashboardData, Order, Despacho } from '../types';
 import { getOverdueDays, getCargueStandardKgPerHour, formatEfficiency, getToday, getWeekRange, getWeekNumber } from '../utils';
 
+const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1d4ed8', '#db2777', '#f59e0b'];
+
 function KpiCard({ icon: Icon, label, value, color, trend, trendLabel }: {
   icon: any; label: string; value: string; color: string; trend?: number; trendLabel?: string;
 }) {

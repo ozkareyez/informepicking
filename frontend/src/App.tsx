@@ -45,7 +45,7 @@ export default function App() {
         ]);
         setPendingCount(pending.length);
         setUnassignedCount(unassigned.length);
-        setCitasPendientes(citas.filter(c => c.estado === 'pendiente').length);
+        setCitasPendientes(citas.filter(c => c.cumplio_cita === false).length);
         setNovedadesPendientes(unc.filter(u => u.novedad && !u.novedad_resuelta).length);
       } catch {}
     }

@@ -151,6 +151,9 @@ export interface CitaCargueFormData {
   tipo: 'Masivo' | 'Venta Directa';
   hora_cita: string;
   hora_llegada?: string | null;
+  retraso_minutos?: number | null;
   cumplio_cita?: boolean | null;
   observaciones?: string;
+  ruta_cargada?: boolean;
+  plc?: string | null;
 }

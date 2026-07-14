@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { CheckCircle, XCircle, X } from 'lucide-react';
 
-type ToastType = 'success' | 'error';
+type ToastType = 'success' | 'error' | 'info';
 
 interface ToastMessage {
   id: number;
@@ -43,7 +43,7 @@ export function ToastContainer() {
       {toasts.map(t => (
         <div key={t.id}
           className={`flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-sm font-medium text-white min-w-[300px] animate-slide-up ${
-            t.type === 'success' ? 'bg-green-600' : 'bg-red-600'
+            t.type === 'success' ? 'bg-green-600' : t.type === 'error' ? 'bg-red-600' : 'bg-blue-600'
           }`}>
           {t.type === 'success' ? <CheckCircle className="w-4 h-4 flex-shrink-0" /> : <XCircle className="w-4 h-4 flex-shrink-0" />}
           <span className="flex-1">{t.message}</span>

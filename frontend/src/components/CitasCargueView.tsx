@@ -245,8 +245,8 @@ export default function CitasCargueView({ onDispatchFromCita }: Props) {
       if (!acc[c.placa]) acc[c.placa] = { count: 0, totalDelay: 0, lastDate: '', ruta: '' };
       acc[c.placa].count++;
       acc[c.placa].totalDelay += c.retraso_minutos || 0;
-      if (c.fecha > acc[c.placa].lastDate) {
-        acc[c.placa].lastDate = c.fecha;
+      if (c.created_at > acc[c.placa].lastDate) {
+        acc[c.placa].lastDate = c.created_at;
         acc[c.placa].ruta = c.ruta;
       }
       return acc;

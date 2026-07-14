@@ -8,6 +8,8 @@ import { getDashboard, getUnloadings } from '../api';
 import type { DashboardData, Unloading } from '../types';
 import { formatEfficiency, getDescargueStandardKgPerHour, getToday, getWeekNumber, getWeekRange } from '../utils';
 
+const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1d4ed8', '#db2777', '#f59e0b'];
+
 function KpiCard({ icon: Icon, label, value, color, trend, trendLabel }: {
   icon: any; label: string; value: string; color: string; trend?: number; trendLabel?: string;
 }) {
