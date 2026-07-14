@@ -1,17 +1,22 @@
-import { useEffect, useState } from 'react';
-import { Warehouse, Package, Minus, Plus, Edit2, Trash2, Save, X, Download, Upload, FileSpreadsheet } from 'lucide-react';
+import { useEffect, useState, useMemo } from 'react';
+import { Warehouse, Package, Minus, Plus, Edit2, Trash2, Save, X, BarChart2, PieChart as PieChartIcon } from 'lucide-react';
 import { getRacks, createRack, updateRack, deleteRack } from '../api';
 import type { Rack, RackFormData } from '../types';
 import { formatNumber } from '../utils';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend
+} from 'recharts';
+
+const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1d4ed8', '#db2777', '#f59e0b'];
 
 const TOTAL_POSICIONES = 720;
 const TOTAL_OCUPADAS = 710;
 const TOTAL_DISPONIBLES = 10;
 
-function KpiCard({ icon: Icon, label, value, color, trend, trendLabel }: {
-  icon: any; label: string; value: string; color: string; trend?: number; trendLabel?: string;
+function KpiCard({ icon: Icon, label, value, color }: {
+  icon: any; label: string; value: string; color: string;
 }) {
-  const isUp = (trend ?? 0) >= 0;
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex items-center gap-4 hover:shadow-md transition-shadow">
       <div className={`${color} p-3 rounded-xl text-white shrink-0 shadow-sm`}>
@@ -20,12 +25,6 @@ function KpiCard({ icon: Icon, label, value, color, trend, trendLabel }: {
       <div className="min-w-0 flex-1">
         <p className="text-xs font-medium text-gray-500 uppercase tracking-wider truncate">{label}</p>
         <p className="text-xl font-bold text-gray-900 mt-0.5 truncate">{value}</p>
-        {trend !== undefined && (
-          <p className={`flex items-center gap-0.5 text-xs font-medium mt-0.5 ${isUp ? 'text-emerald-600' : 'text-red-500'}`}>
-            {isUp ? <span>▲</span> : <span>▼</span>}
-            {trendLabel || `${Math.abs(trend)}%`}
-          </p>
-        )}
       </div>
     </div>
   );
@@ -106,6 +105,19 @@ export default function DashboardBodega() {
   const totalDisponible = racks.reduce((s, r) => s + r.disponible, 0) || TOTAL_DISPONIBLES;
   const pctOcupacion = totalPosiciones > 0 ? ((totalOcupacion / totalPosiciones) * 100).toFixed(2) : '0';
 
+  // Chart data
+  const barChartData = racks.map(r => ({
+    rack: r.codigo,
+    posiciones: r.posiciones,
+    ocupacion: r.ocupacion,
+    disponible: r.disponible,
+  }));
+
+  const pieChartData = [
+    { name: 'Ocupado', value: totalOcupacion, color: '#f59e0b' },
+    { name: 'Disponible', value: totalDisponible, color: '#10b981' },
+  ];
+
   if (loading) return (
     <div className="flex items-center justify-center h-64">
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
@@ -133,6 +145,53 @@ export default function DashboardBodega() {
         <KpiCard icon={Package} label="% Ocupación" value={`${pctOcupacion}%`} color={parseFloat(pctOcupacion) >= 90 ? 'bg-red-600' : parseFloat(pctOcupacion) >= 75 ? 'bg-amber-600' : 'bg-green-600'} />
       </div>
 
+      {/* ── Gráficos ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+            <BarChart2 className="w-4 h-4 text-blue-600" />
+            Posiciones vs Ocupación por Rack
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={barChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <XAxis dataKey="rack" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), '']} />
+              <Legend />
+              <Bar dataKey="posiciones" fill="#3b82f6" radius={[6, 6, 0, 0]} name="Posiciones" />
+              <Bar dataKey="ocupacion" fill="#f59e0b" radius={[6, 6, 0, 0]} name="Ocupación" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+          <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+            <PieChartIcon className="w-4 h-4 text-amber-600" />
+            Ocupación Global
+          </h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <PieChart>
+              <Pie
+                data={pieChartData}
+                cx="50%" cy="50%"
+                labelLine={false}
+                label={({ name, value, percent }) => `${name}: ${formatNumber(value)} (${(percent * 100).toFixed(1)}%)`}
+                outerRadius={100}
+                dataKey="value" nameKey="name"
+              >
+                {pieChartData.map((_, index) => (
+                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), '']} />
+              <Legend wrapperStyle={{ fontSize: 11 }} />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ── Tabla ── */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
         <table className="w-full">
           <thead className="bg-gray-50">
