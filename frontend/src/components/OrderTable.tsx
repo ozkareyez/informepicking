@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, ArrowUpDown, Edit, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, Trash, User, Truck, Download, ChevronDown, ChevronUp } from 'lucide-react';
 import { getOrders, deleteOrder, clearAllData, deleteOrdersByDateRange, getAllDespachos, getUnloadings } from '../api';
 import type { Order, Despacho, Unloading } from '../types';
-import { calculateKgPerHour, calculateEfficiency, getOverdueDays, getWeekNumber } from '../utils';
+import { calculateKgPerHour, calculateEfficiency, getOverdueDays, getWeekNumber, toUpperCase } from '../utils';
 import * as XLSX from 'xlsx';
 
 const EXCEL_COL_WIDTHS = [
@@ -163,12 +163,12 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         registros.push({
           Semana: semana,
           Fecha: o.date,
-          Cliente: o.cliente,
+          Cliente: o.cliente.toUpperCase(),
           PLC: '',
           Placa: '',
-          SKU: o.sku,
+          SKU: o.sku.toUpperCase(),
           Kg: o.kg,
-          Operario: o.operator,
+          Operario: o.operator.toUpperCase(),
           Eficiencia: eficiencia,
           'Tiempo alistamiento': o.time_spent ?? '',
           'Fecha despacho': '',
@@ -181,12 +181,12 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
           registros.push({
             Semana: semana,
             Fecha: o.date,
-            Cliente: o.cliente,
-            PLC: d.plc,
-            Placa: d.placa,
-            SKU: o.sku,
+            Cliente: o.cliente.toUpperCase(),
+            PLC: d.plc?.toUpperCase() || '',
+            Placa: d.placa?.toUpperCase() || '',
+            SKU: o.sku.toUpperCase(),
             Kg: o.kg,
-            Operario: o.operator,
+            Operario: o.operator.toUpperCase(),
             Eficiencia: eficiencia,
             'Tiempo alistamiento': o.time_spent ?? '',
             'Fecha despacho': d.created_at?.slice(0, 10) ?? '',
@@ -503,11 +503,11 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                   const hasDespachos = despachos.length > 0;
                   const isExpanded = expandedOrderId === order.id;
 
-                  // Aggregate dispatch info for main row display
-                  const plcs = despachos.map(d => d.plc).filter(Boolean).join(', ');
-                  const placas = despachos.map(d => d.placa).filter(Boolean).join(', ');
+// Aggregate dispatch info for main row display
+                  const plcs = despachos.map(d => d.plc?.toUpperCase()).filter(Boolean).join(', ');
+                  const placas = despachos.map(d => d.placa?.toUpperCase()).filter(Boolean).join(', ');
                   const cargueTimes = despachos.map(d => d.cargue_time).filter(Boolean).join(', ');
-                  const rutas = [...new Set(despachos.map(d => d.ruta).filter(Boolean))].join(', ');
+                  const rutas = [...new Set(despachos.map(d => d.ruta?.toUpperCase()).filter(Boolean))].join(', ');
                   const totalDespachadoKg = despachos.reduce((s, d) => s + d.kg, 0);
                   const vehiculosCount = despachos.length;
 
@@ -515,13 +515,13 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                     <>
                       <tr key={order.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => hasDespachos && setExpandedOrderId(isExpanded ? null : order.id)}>
                         <td className="px-2 py-1.5 text-xs text-gray-900 whitespace-nowrap">{order.date}</td>
-                        <td className="px-2 py-1.5 text-xs font-medium text-gray-900 truncate max-w-[100px]">{order.cliente}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.sku}</td>
+                        <td className="px-2 py-1.5 text-xs font-medium text-gray-900 truncate max-w-[100px]">{order.cliente.toUpperCase()}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.sku.toUpperCase()}</td>
                         <td className="px-2 py-1.5 text-xs text-gray-700">{order.kg}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.operator}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.operator.toUpperCase()}</td>
                         <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{order.start_time}</td>
                         <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{val(order.end_time)}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.time_spent)}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{val(order.time_spent)}</td>
                         <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.kg_per_hour)}</td>
                         <td className="px-2 py-1.5 text-xs">
                           {order.efficiency != null ? (
@@ -539,8 +539,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                             {order.type === 'Masivo' ? 'M' : 'VD'}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700" title={plcs || undefined}>{plcs || val(order.plc)}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700" title={placas || undefined}>{placas || val(order.placa)}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700" title={plcs || undefined}>{plcs || val(order.plc?.toUpperCase())}</td>
+                        <td className="px-2 py-1.5 text-xs text-gray-700" title={placas || undefined}>{placas || val(order.placa?.toUpperCase())}</td>
                         <td className="px-2 py-1.5 text-xs text-gray-700" title={cargueTimes || undefined}>{cargueTimes || val(order.cargue_time)}</td>
                         <td className="px-2 py-1.5 text-xs">
                           <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
@@ -586,16 +586,16 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                               {despachos.map(d => (
                                 <div key={d.id} className="bg-white border border-green-200 rounded-lg p-3 space-y-1">
                                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                                    <span className="font-medium text-green-900">Placa: <span className="font-mono">{d.placa}</span></span>
-                                    <span className="text-green-700">PLC: <span className="font-mono">{d.plc}</span></span>
+                                    <span className="font-medium text-green-900">Placa: <span className="font-mono">{toUpperCase(d.placa)}</span></span>
+                                    <span className="text-green-700">PLC: <span className="font-mono">{toUpperCase(d.plc)}</span></span>
                                     <span className="text-green-700"><strong>{d.kg} kg</strong></span>
                                     <span className="text-green-700">Cargue: {d.cargue_time}</span>
                                     <span className="text-green-700">Inicio: {d.cargue_start}</span>
                                     <span className="text-green-700">Fin: {d.cargue_end}</span>
-                                    {d.ruta && <span className="text-blue-600">Ruta: {d.ruta}</span>}
+                                    {d.ruta && <span className="text-blue-600">Ruta: {toUpperCase(d.ruta)}</span>}
                                     {d.date && <span className="text-green-700">Fecha: {d.date}</span>}
                                     {d.created_at && <span className="text-green-700">Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
-                                    {d.created_by && <span className="text-gray-500">Por: {d.created_by}</span>}
+                                    {d.created_by && <span className="text-gray-500">Por: {toUpperCase(d.created_by)}</span>}
                                   </div>
                                 </div>
                               ))}
@@ -623,8 +623,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
             paginated.map(order => (
               <div key={order.id} className="px-3 py-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-semibold text-gray-900 truncate">{order.cliente}</span>
+<div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm font-semibold text-gray-900 truncate">{toUpperCase(order.cliente)}</span>
                     <span className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
                       order.type === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
                     }`}>{order.type === 'Masivo' ? 'M' : 'VD'}</span>
@@ -648,14 +648,14 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-600 mt-0.5">
                   <span>{order.date}</span>
                   <span>{order.kg} kg</span>
-                  <span>{order.operator}</span>
+                  <span>{toUpperCase(order.operator)}</span>
                   <span>{order.start_time}-{val(order.end_time)}</span>
                   <span>{val(order.time_spent)}</span>
                   {order.efficiency != null && <span className={order.efficiency >= 100 ? 'text-green-600' : 'text-orange-500'}>{order.efficiency.toFixed(1)}%</span>}
-                  {order.plc && <span>PLC:{order.plc}</span>}
-                  {order.placa && <span>Placa:{order.placa}</span>}
+                  {order.plc && <span>PLC:{toUpperCase(order.plc)}</span>}
+                  {order.placa && <span>Placa:{toUpperCase(order.placa)}</span>}
                   {order.cargue_time && <span>Cargue:{order.cargue_time}</span>}
-                  {order.created_by && <span className="text-gray-400">Por: {order.created_by}</span>}
+                  {order.created_by && <span className="text-gray-400">Por: {toUpperCase(order.created_by)}</span>}
                   <span className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium ${
                     order.status === 'despachado' ? 'bg-green-100 text-green-800' : order.status === 'completed' ? 'bg-blue-100 text-blue-800' : order.status === 'pending' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
                   }`}>

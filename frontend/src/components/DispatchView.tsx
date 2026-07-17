@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Truck, Package, Search, CheckCircle, AlertTriangle, Calendar } from 'lucide-react';
 import { getOrdersForDispatch, getDespachos, createDespacho } from '../api';
 import type { Order, Despacho } from '../types';
-import { getOverdueDays, getToday, getWeekRange, getWeekNumber } from '../utils';
+import { getOverdueDays, getToday, getWeekRange, getWeekNumber, toUpperCase } from '../utils';
 import DispatchModal from './DispatchModal';
 
 function isOverdue(order: Order): boolean {
@@ -287,10 +287,10 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
                         <span>Cargue: {d.cargue_time}</span>
                         <span>Inicio: {d.cargue_start}</span>
                         <span>Fin: {d.cargue_end}</span>
-                        {d.ruta && <span className="text-blue-600">Ruta: {d.ruta}</span>}
+                        {d.ruta && <span className="text-blue-600">Ruta: {toUpperCase(d.ruta)}</span>}
                         {d.date && <span>Fecha: {d.date}</span>}
                         {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
-                        {d.created_by && <span className="text-gray-400">Por: {d.created_by}</span>}
+                        {d.created_by && <span className="text-gray-400">Por: {toUpperCase(d.created_by)}</span>}
                       </div>
                     ))}
                   </div>
@@ -331,10 +331,10 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
                               <span>Cargue: {d.cargue_time}</span>
                               <span>Inicio: {d.cargue_start}</span>
                               <span>Fin: {d.cargue_end}</span>
-                              {d.ruta && <span>Ruta: {d.ruta}</span>}
+                              {d.ruta && <span>Ruta: {toUpperCase(d.ruta)}</span>}
                               {d.date && <span>Fecha: {d.date}</span>}
                               {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
-                              {d.created_by && <span>Por: {d.created_by}</span>}
+                              {d.created_by && <span>Por: {toUpperCase(d.created_by)}</span>}
                             </div>
                           ))}
                       </div>

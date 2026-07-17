@@ -118,3 +118,7 @@ export function calculateCargueTime(start: string, end: string): string {
   const minutes = totalMinutes % 60;
   return `${hours}h ${minutes.toString().padStart(2, '0')}m`;
 }
+
+export function toUpperCase(value: string | null | undefined): string {
+  return (value ?? '').toUpperCase();
+}

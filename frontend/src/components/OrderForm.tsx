@@ -163,7 +163,7 @@ export default function OrderForm({ onSubmit }: Props) {
             <label className="block text-sm sm:text-xs font-medium text-gray-700 sm:text-gray-500 mb-1 sm:mb-0.5">Cliente</label>
             <input
               value={inputCliente}
-              onChange={e => { setInputCliente(e.target.value); setValue('cliente', e.target.value); setShowSuggestions(true); }}
+              onChange={e => { setInputCliente(e.target.value.toUpperCase()); setValue('cliente', e.target.value.toUpperCase()); setShowSuggestions(true); }}
               onFocus={() => setShowSuggestions(true)}
               className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500"
               placeholder="Nombre del cliente"
@@ -185,7 +185,7 @@ export default function OrderForm({ onSubmit }: Props) {
 
           <div>
             <label className="block text-sm sm:text-xs font-medium text-gray-700 sm:text-gray-500 mb-1 sm:mb-0.5">SKU</label>
-            <input type="text" {...register('sku', { required: 'Obligatorio' })}
+            <input type="text" {...register('sku', { required: 'Obligatorio', setValueAs: (v) => v.toUpperCase() })}
               className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" placeholder="Ej: PROD-001" />
             {errors.sku && <p className="text-red-500 text-xs sm:text-[10px] mt-1 sm:mt-0.5">{errors.sku.message}</p>}
           </div>

@@ -83,8 +83,8 @@ export default function CitasCargueView({ onDispatchFromCita }: Props) {
         const errs: string[] = [];
         for (let i = 0; i < json.length; i++) {
           const row = json[i];
-          const rowRuta = String(row['Ruta'] || row['ruta'] || '').trim();
-          const rowPlaca = String(row['Placa'] || row['placa'] || '').trim();
+          const rowRuta = String(row['Ruta'] || row['ruta'] || '').trim().toUpperCase();
+          const rowPlaca = String(row['Placa'] || row['placa'] || '').trim().toUpperCase();
           const rowKg = Number(row['Kg'] || row['kg'] || row['KG'] || 0);
           const rowTipo = String(row['Tipo'] || row['tipo'] || row['type'] || row['Type'] || '').trim();
           const rowHoraCita = String(row['Hora cita'] || row['hora_cita'] || '').trim();
@@ -419,7 +419,7 @@ export default function CitasCargueView({ onDispatchFromCita }: Props) {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Ruta</label>
-                <input type="text" value={ruta} onChange={e => setRuta(e.target.value)}
+                <input type="text" value={ruta} onChange={e => setRuta(e.target.value.toUpperCase())}
                   placeholder="Ej: Cerrito"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
               </div>
@@ -473,7 +473,7 @@ export default function CitasCargueView({ onDispatchFromCita }: Props) {
               </div>
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium text-gray-500 mb-1">Observaciones</label>
-                <input type="text" value={observaciones} onChange={e => setObservaciones(e.target.value)}
+                <input type="text" value={observaciones} onChange={e => setObservaciones(e.target.value.toUpperCase())}
                   placeholder="Ej: Vehículo sucio, documentos incompletos..."
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
               </div>

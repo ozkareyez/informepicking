@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, Truck, Save, Package, MapPin, AlertTriangle, AlertCircle } from 'lucide-react';
 import type { Order, Despacho, CitaCargue } from '../types';
-import { getCurrentTime, calculateCargueTime, getToday } from '../utils';
+import { getCurrentTime, calculateCargueTime, getToday, toUpperCase } from '../utils';
 
 interface Props {
   order: Order;
@@ -57,7 +57,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
       : null;
 
   function handleRutaChange(val: string) {
-    setRuta(val);
+    setRuta(val.toUpperCase());
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -67,6 +67,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
     if (!ruta.trim() && despachos.length === 0) { setError('El nombre de ruta es obligatorio'); return; }
     if (!placa.trim()) { setError('La placa del vehículo es obligatoria'); return; }
     if (!plc.trim()) { setError('El número de PLC es obligatorio'); return; }
+    if (!/^\d+$/.test(plc.trim())) { setError('El PLC solo debe contener números'); return; }
     if (!kg || kgNum <= 0) { setError('Los kg deben ser mayor a 0'); return; }
     if (kgNum > saldo) { setError(`Los kg no pueden exceder el saldo disponible (${saldo} kg)`); return; }
     if (!cargueStart) { setError('La hora de inicio de cargue es obligatoria'); return; }
@@ -119,14 +120,14 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3 space-y-1">
             <div className="flex items-center gap-1.5 text-sm font-medium text-blue-900">
               <Package className="w-4 h-4" />
-              {order.cliente}
+              {toUpperCase(order.cliente)}
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-blue-800">
-              <span>SKU: <strong>{order.sku}</strong></span>
+              <span>SKU: <strong>{toUpperCase(order.sku)}</strong></span>
               <span>Total: <strong>{order.kg} kg</strong></span>
               <span>Despachado: <strong>{order.despachado_kg} kg</strong></span>
               <span className="text-amber-700 font-semibold">Saldo: <strong>{saldo} kg</strong></span>
-              <span className="col-span-2">Operario: <strong>{order.operator}</strong></span>
+              <span className="col-span-2">Operario: <strong>{toUpperCase(order.operator)}</strong></span>
             </div>
           </div>
 
@@ -136,9 +137,9 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
               <p className="text-xs font-medium text-gray-500">Vehículos ya despachados ({despachos.length}):</p>
               {despachos.map(d => (
                 <div key={d.id} className="text-xs text-gray-700 flex flex-wrap gap-x-3">
-                  <span><strong>{d.placa}</strong></span>
+                  <span><strong>{toUpperCase(d.placa)}</strong></span>
                   <span>{d.kg} kg</span>
-                  <span>PLC: {d.plc}</span>
+                  <span>PLC: {toUpperCase(d.plc)}</span>
                   <span>{d.cargue_time}</span>
                   {d.novedad && <span className="text-red-600 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Novedad: {d.cantidad_referencias_novedad} refs</span>}
                 </div>
@@ -182,9 +183,10 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
             <label className="block text-xs sm:text-[10px] font-medium text-gray-500 mb-1 sm:mb-0.5">
               PLC (documento)
             </label>
-            <input type="text" value={plc} onChange={e => setPlc(e.target.value)}
-              placeholder="Ej: PLC-001"
+            <input type="text" value={plc} onChange={e => setPlc(e.target.value.replace(/\D/g, ''))}
+              placeholder="Ej: 12345"
               className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
+            <p className="text-[10px] text-gray-400 mt-0.5">Solo números</p>
           </div>
 
           {/* Kg */}
