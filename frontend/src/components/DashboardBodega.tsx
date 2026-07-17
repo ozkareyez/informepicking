@@ -64,7 +64,7 @@ export default function DashboardBodega() {
 
     try {
       if (editingRack) {
-        await updateRack(editingRack.id, formData);
+        await updateRack(editingRack.id, { ocupacion: formData.ocupacion });
       } else {
         await createRack(formData);
       }
@@ -286,7 +286,8 @@ export default function DashboardBodega() {
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Total Posiciones</label>
                 <input type="number" min="1" value={formData.posiciones} onChange={e => setFormData({ ...formData, posiciones: parseInt(e.target.value) || 0 })}
-                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" required />
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" required disabled={!!editingRack} />
+                {editingRack && <p className="text-xs text-gray-400 mt-1">Las posiciones no se pueden editar</p>}
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Ocupación</label>

@@ -41,6 +41,8 @@ export interface Despacho {
   cargue_time: string;
   created_by: string;
   created_at: string;
+  novedad: boolean;
+  cantidad_referencias_novedad: number;
 }
 
 export interface OrderFormData {
@@ -172,5 +174,9 @@ export interface Rack {
 export interface RackFormData {
   codigo: string;
   posiciones: number;
+  ocupacion: number;
+}
+
+export interface RackUpdateData {
   ocupacion: number;
 }

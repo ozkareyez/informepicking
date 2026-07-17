@@ -1,5 +1,5 @@
 import { getSupabase } from './supabase';
-import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData, Rack, RackFormData } from './types';
+import type { Order, RegisterOrderData, OrderFormData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData, Rack, RackFormData, RackUpdateData } from './types';
 
 function getCurrentUser(): string {
   return localStorage.getItem('current_user') || '';
@@ -46,6 +46,8 @@ function mapDespacho(row: any): Despacho {
     cargue_time: row.cargue_time,
     created_by: row.created_by ?? '',
     created_at: row.created_at,
+    novedad: row.novedad ?? false,
+    cantidad_referencias_novedad: Number(row.cantidad_referencias_novedad ?? 0),
   };
 }
 
@@ -423,6 +425,8 @@ export async function createDespacho(orderId: number, data: {
   cargue_start: string;
   cargue_end: string;
   ruta?: string;
+  novedad?: boolean;
+  cantidad_referencias_novedad?: number;
 }): Promise<Despacho> {
   const cargue_time = calculateCargueTime(data.cargue_start, data.cargue_end);
 
@@ -437,6 +441,8 @@ export async function createDespacho(orderId: number, data: {
     cargue_end: data.cargue_end,
     cargue_time,
     created_by: getCurrentUser(),
+    novedad: data.novedad ?? false,
+    cantidad_referencias_novedad: data.cantidad_referencias_novedad ?? 0,
   }).select().single();
   if (insertError) throw new Error(insertError.message);
 
@@ -720,24 +726,11 @@ export async function createRack(data: RackFormData): Promise<Rack> {
   return mapRack(rack);
 }
 
-export async function updateRack(id: number, data: Partial<RackFormData>): Promise<void> {
-  const updateData: any = { ...data, updated_by: getCurrentUser() };
-  
-  if (data.posiciones !== undefined || data.ocupacion !== undefined) {
-    // Need to fetch current values to calculate
-    const { data: current } = await getSupabase().from('racks').select('posiciones, ocupacion').eq('id', id).single();
-    if (current) {
-      const posiciones = data.posiciones ?? current.posiciones;
-      const ocupacion = data.ocupacion ?? current.ocupacion;
-      updateData.posiciones = posiciones;
-      updateData.ocupacion = ocupacion;
-      // disponible and porcentaje_ocupacion are generated columns, don't include them
-    }
-  } else {
-    // Remove calculated fields if not updating posiciones/ocupacion
-    delete updateData.disponible;
-    delete updateData.porcentaje_ocupacion;
-  }
+export async function updateRack(id: number, data: { ocupacion: number }): Promise<void> {
+  const updateData: any = { 
+    ocupacion: data.ocupacion,
+    updated_by: getCurrentUser() 
+  };
 
   const { error } = await getSupabase().from('racks').update(updateData).eq('id', id);
   if (error) throw new Error(error.message);

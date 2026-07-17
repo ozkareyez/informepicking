@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, Truck, Save, Package, MapPin, AlertTriangle } from 'lucide-react';
+import { X, Truck, Save, Package, MapPin, AlertTriangle, AlertCircle } from 'lucide-react';
 import type { Order, Despacho, CitaCargue } from '../types';
 import { getCurrentTime, calculateCargueTime, getToday } from '../utils';
 
@@ -14,6 +14,8 @@ interface Props {
     cargue_start: string;
     cargue_end: string;
     ruta: string;
+    novedad?: boolean;
+    cantidad_referencias_novedad?: number;
   }) => Promise<void>;
   onClose: () => void;
   cita?: CitaCargue | null;
@@ -36,6 +38,8 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
   const [cargueEnd, setCargueEnd] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [novedad, setNovedad] = useState(false);
+  const [cantidadReferenciasNovedad, setCantidadReferenciasNovedad] = useState(0);
 
   // Update form when cita changes
   useEffect(() => {
@@ -68,6 +72,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
     if (!cargueStart) { setError('La hora de inicio de cargue es obligatoria'); return; }
     if (!cargueEnd) { setError('La hora de fin de cargue es obligatoria'); return; }
     if (cargueEnd <= cargueStart) { setError('La hora fin debe ser mayor a la hora inicio'); return; }
+    if (novedad && cantidadReferenciasNovedad <= 0) { setError('Si hay novedad, debe ingresar la cantidad de referencias con novedad'); return; }
 
     setSaving(true);
     try {
@@ -79,6 +84,8 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
         date,
         cargue_start: cargueStart,
         cargue_end: cargueEnd,
+        novedad,
+        cantidad_referencias_novedad: novedad ? cantidadReferenciasNovedad : 0,
       });
       onClose();
     } catch (err: any) {
@@ -133,6 +140,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
                   <span>{d.kg} kg</span>
                   <span>PLC: {d.plc}</span>
                   <span>{d.cargue_time}</span>
+                  {d.novedad && <span className="text-red-600 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Novedad: {d.cantidad_referencias_novedad} refs</span>}
                 </div>
               ))}
             </div>
@@ -187,6 +195,43 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
             <input type="number" value={kg} onChange={e => setKg(e.target.value)}
               placeholder={`0 - ${saldo}`} min="1" max={saldo}
               className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
+          </div>
+
+          {/* Novedad section */}
+          <div className="bg-amber-50 border border-amber-200 rounded-md p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="novedad-checkbox"
+                checked={novedad}
+                onChange={e => {
+                  setNovedad(e.target.checked);
+                  if (!e.target.checked) setCantidadReferenciasNovedad(0);
+                }}
+                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
+              <label htmlFor="novedad-checkbox" className="text-sm font-medium text-amber-900 cursor-pointer">
+                ¿Hubo novedad en el cargue?
+              </label>
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+            </div>
+            {novedad && (
+              <div>
+                <label className="block text-xs font-medium text-amber-800 mb-1">
+                  Cantidad de referencias con novedad
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  value={cantidadReferenciasNovedad}
+                  onChange={e => setCantidadReferenciasNovedad(parseInt(e.target.value) || 0)}
+                  className="w-full rounded-lg sm:rounded-md border border-amber-300 bg-amber-50 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-amber-500"
+                  required
+                />
+                <p className="text-[10px] text-amber-600 mt-1">
+                  Indique cuántas referencias/SKUs presentaron novedad al separar el pedido
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Cargue times */}

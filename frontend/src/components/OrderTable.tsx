@@ -193,6 +193,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
             'Tiempo cargue': d.cargue_time,
             'Kg despachados': d.kg,
             'Días retraso': diasRetraso,
+            'Novedad cargue': d.novedad ? 'Sí' : 'No',
+            'Cantidad referencias novedad': d.novedad ? d.cantidad_referencias_novedad : 0,
           });
         }
       }
@@ -203,7 +205,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       { wch: 8 }, { wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 14 },
       { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 10 },
       { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-      { wch: 12 },
+      { wch: 12 }, { wch: 16 }, { wch: 22 },
     ];
     applyHeaderStyle(wsReg);
     XLSX.utils.book_append_sheet(wb, wsReg, 'Registros');

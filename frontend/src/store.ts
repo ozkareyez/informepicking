@@ -62,6 +62,8 @@ export async function createDespacho(orderId: number, data: {
   cargue_start: string;
   cargue_end: string;
   ruta?: string;
+  novedad?: boolean;
+  cantidad_referencias_novedad?: number;
 }): Promise<Despacho> {
   const cargue_time = calculateCargueTime(data.cargue_start, data.cargue_end);
 
@@ -80,6 +82,8 @@ export async function createDespacho(orderId: number, data: {
     cargue_time,
     created_by: localStorage.getItem('current_user') || '',
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
+    novedad: data.novedad ?? false,
+    cantidad_referencias_novedad: data.cantidad_referencias_novedad ?? 0,
   };
   despachos.push(despacho);
   saveDespachos(despachos);

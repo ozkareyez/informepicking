@@ -1,4 +1,4 @@
-import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData, Rack, RackFormData } from './types';
+import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData, Rack, RackFormData, RackUpdateData } from './types';
 import * as supabaseStore from './supabaseStore';
 
 const active = supabaseStore;
@@ -103,6 +103,8 @@ export async function createDespacho(orderId: number, data: {
   cargue_start: string;
   cargue_end: string;
   ruta?: string;
+  novedad?: boolean;
+  cantidad_referencias_novedad?: number;
 }): Promise<Despacho> {
   return active.createDespacho(orderId, data);
 }
@@ -171,7 +173,7 @@ export async function createRack(data: RackFormData): Promise<Rack> {
   return active.createRack(data);
 }
 
-export async function updateRack(id: number, data: Partial<RackFormData>): Promise<void> {
+export async function updateRack(id: number, data: { ocupacion: number }): Promise<void> {
   return active.updateRack(id, data);
 }
 
