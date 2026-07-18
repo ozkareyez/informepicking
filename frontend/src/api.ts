@@ -201,3 +201,13 @@ export async function getFourWeekTrend(): Promise<{
   return active.getFourWeekTrend();
 }
 
+// ─── Despachos - Edición y Devolución ──────────────────────────────
+
+export async function updateDespachoKg(despachoId: number, newKg: number, password: string): Promise<void> {
+  return active.updateDespachoKg(despachoId, newKg, password);
+}
+
+export async function finishOrderWithDevolucion(orderId: number, devolucionKg: number, password: string): Promise<Order> {
+  return active.finishOrderWithDevolucion(orderId, devolucionKg, password);
+}
+

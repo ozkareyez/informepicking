@@ -24,6 +24,7 @@ export interface Order {
   cargue_end: string | null;
   cargue_time: string | null;
   despachado_kg: number;
+  devolucion_kg: number;
   created_by: string;
   created_at: string;
 }

@@ -174,6 +174,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
           'Fecha despacho': '',
           'Tiempo cargue': '',
           'Kg despachados': o.despachado_kg,
+          'Devolución kg': o.devolucion_kg ?? 0,
+          'Estado final': o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : '',
           'Días retraso': diasRetraso,
         });
       } else {
@@ -192,6 +194,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
             'Fecha despacho': d.created_at?.slice(0, 10) ?? '',
             'Tiempo cargue': d.cargue_time,
             'Kg despachados': d.kg,
+            'Devolución kg': o.devolucion_kg ?? 0,
+            'Estado final': o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : '',
             'Días retraso': diasRetraso,
             'Novedad cargue': d.novedad ? 'Sí' : 'No',
             'Cantidad referencias novedad': d.novedad ? d.cantidad_referencias_novedad : 0,
@@ -205,7 +209,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       { wch: 8 }, { wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 14 },
       { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 10 },
       { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-      { wch: 12 }, { wch: 16 }, { wch: 22 },
+      { wch: 12 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 20 },
     ];
     applyHeaderStyle(wsReg);
     XLSX.utils.book_append_sheet(wb, wsReg, 'Registros');

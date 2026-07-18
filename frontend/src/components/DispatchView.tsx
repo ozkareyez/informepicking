@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Truck, Package, Search, CheckCircle, AlertTriangle, Calendar } from 'lucide-react';
-import { getOrdersForDispatch, getDespachos, createDespacho } from '../api';
+import { Truck, Package, Search, CheckCircle, AlertTriangle, Calendar, Edit, RotateCcw } from 'lucide-react';
+import { getOrdersForDispatch, getDespachos, createDespacho, updateDespachoKg, finishOrderWithDevolucion } from '../api';
 import type { Order, Despacho } from '../types';
 import { getOverdueDays, getToday, getWeekRange, getWeekNumber, toUpperCase } from '../utils';
 import DispatchModal from './DispatchModal';
+import PasswordModal from './PasswordModal';
 
 function isOverdue(order: Order): boolean {
   return getOverdueDays(order.date, order.type) > 0;
@@ -26,6 +27,14 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
   const [deleteStartDate, setDeleteStartDate] = useState('');
   const [deleteEndDate, setDeleteEndDate] = useState('');
   const [typeTab, setTypeTab] = useState<TypeTab>('Masivo');
+
+  // Password modal state
+  const [passwordModal, setPasswordModal] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    action: (password: string) => Promise<void>;
+  } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,6 +75,37 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
     onOrderChange?.();
   }
 
+  function handleEditDespacho(despacho: Despacho) {
+    setPasswordModal({
+      open: true,
+      title: 'Editar peso del despacho',
+      message: `Despacho: Placa ${despacho.placa} (PLC: ${despacho.plc})\nPeso actual: ${despacho.kg} kg\n\nIngrese nuevo peso en kg:`,
+      action: async (password) => {
+        const newKg = prompt(`Nuevo peso para ${despacho.placa} (actual: ${despacho.kg} kg):`);
+        if (newKg === null) return;
+        const kg = Number(newKg);
+        if (isNaN(kg) || kg <= 0) throw new Error('Peso inválido');
+        await updateDespachoKg(despacho.id, kg, password);
+        load();
+        onOrderChange?.();
+      },
+    });
+  }
+
+  function handleFinishWithDevolucion(order: Order) {
+    const saldo = order.kg - order.despachado_kg;
+    setPasswordModal({
+      open: true,
+      title: 'Finalizar con devolución',
+      message: `Pedido: ${order.cliente} - ${order.sku}\nTotal: ${order.kg} kg | Despachado: ${order.despachado_kg} kg | Saldo: ${saldo} kg\n\n¿Desea marcar como devolución ${saldo} kg y finalizar el pedido?`,
+      action: async (password) => {
+        await finishOrderWithDevolucion(order.id, saldo, password);
+        load();
+        onOrderChange?.();
+      },
+    });
+  }
+
   const filteredByDate = useMemo(() => {
     if (!period) return orders;
     if (period === 'day') return orders.filter(o => o.date === date);
@@ -82,6 +122,7 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
 
   const pendingOrders = filteredByDate.filter(o => (o.despachado_kg ?? 0) < o.kg);
   const doneOrders = filteredByDate.filter(o => (o.despachado_kg ?? 0) >= o.kg);
+
 
   const pendingMasivo = pendingOrders.filter(o => o.type === 'Masivo');
   const pendingVd = pendingOrders.filter(o => o.type === 'Venta Directa');
@@ -271,18 +312,25 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
                     <span className="text-green-600">{order.despachado_kg} kg despachados</span>
                     <span className="text-amber-600 font-medium">{saldo} kg saldo</span>
                   </div>
+                  {saldo > 0 && (
+                    <button onClick={() => handleFinishWithDevolucion(order)}
+                      className="mt-2 w-full py-1.5 text-xs font-medium text-white bg-purple-600 rounded hover:bg-purple-700 flex items-center justify-center gap-1.5">
+                      <RotateCcw className="w-3 h-3" />
+                      Finalizar con devolución ({saldo} kg)
+                    </button>
+                  )}
                 </div>
 
-                {despachos.length > 0 && (
+{despachos.length > 0 && (
                   <div className="mt-3 bg-gray-50 rounded-md p-2 space-y-1">
                     <p className="text-xs font-medium text-gray-500">
                       Vehículo{despachos.length !== 1 ? 's' : ''} ({despachos.length})
                       {despachos[0]?.ruta && <span className="text-blue-600 ml-1">· Ruta: {despachos[0].ruta}</span>}:
                     </p>
                     {despachos.map(d => (
-                      <div key={d.id} className="text-xs text-gray-700 flex flex-wrap gap-x-3 gap-y-0.5">
-                        <span>Placa: <strong>{d.placa}</strong></span>
-                        <span>PLC: {d.plc}</span>
+                      <div key={d.id} className="text-xs text-gray-700 flex flex-wrap gap-x-3 gap-y-0.5 items-center">
+                        <span>Placa: <strong>{toUpperCase(d.placa)}</strong></span>
+                        <span>PLC: {toUpperCase(d.plc)}</span>
                         <span>{d.kg} kg</span>
                         <span>Cargue: {d.cargue_time}</span>
                         <span>Inicio: {d.cargue_start}</span>
@@ -291,6 +339,7 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
                         {d.date && <span>Fecha: {d.date}</span>}
                         {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
                         {d.created_by && <span className="text-gray-400">Por: {toUpperCase(d.created_by)}</span>}
+                        <button onClick={() => handleEditDespacho(d)} className="text-blue-600 hover:text-blue-800 underline text-[10px] px-1 py-0.5 rounded">Editar</button>
                       </div>
                     ))}
                   </div>
@@ -324,19 +373,24 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
                         </div>
                         <p className="text-xs text-green-500 pl-6">Fecha pedido: {order.date}</p>
 {despachos.map(d => (
-                            <div key={d.id} className="text-xs text-green-700 pl-6 flex flex-wrap gap-x-3 gap-y-0.5">
-                              <span>Placa: <strong>{d.placa}</strong></span>
-                              <span>PLC: {d.plc}</span>
-                              <span>{d.kg} kg</span>
-                              <span>Cargue: {d.cargue_time}</span>
-                              <span>Inicio: {d.cargue_start}</span>
-                              <span>Fin: {d.cargue_end}</span>
-                              {d.ruta && <span>Ruta: {toUpperCase(d.ruta)}</span>}
-                              {d.date && <span>Fecha: {d.date}</span>}
-                              {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
-                              {d.created_by && <span>Por: {toUpperCase(d.created_by)}</span>}
-                            </div>
-                          ))}
+                      <div key={d.id} className="text-xs text-gray-700 flex flex-wrap gap-x-3 gap-y-0.5 items-center">
+                        <span>Placa: <strong>{d.placa}</strong></span>
+                        <span>PLC: {d.plc}</span>
+                        <span>{d.kg} kg</span>
+                        <span>Cargue: {d.cargue_time}</span>
+                        <span>Inicio: {d.cargue_start}</span>
+                        <span>Fin: {d.cargue_end}</span>
+                        {d.ruta && <span className="text-blue-600">Ruta: {toUpperCase(d.ruta)}</span>}
+                        {d.date && <span>Fecha: {d.date}</span>}
+                        {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
+                        {d.created_by && <span className="text-gray-400">Por: {toUpperCase(d.created_by)}</span>}
+                        <button onClick={() => handleEditDespacho(d)}
+                          className="text-blue-600 hover:text-blue-800 underline text-[10px] px-1 py-0.5 rounded"
+                          title="Editar peso">
+                          <Edit className="w-3 h-3 inline mr-0.5" /> Editar
+                        </button>
+                      </div>
+                    ))}
                       </div>
                     );
                   })}
@@ -353,6 +407,15 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
           despachos={despachosMap[dispatchOrder.id] || []}
           onSave={handleDespacho}
           onClose={() => setDispatchOrder(null)}
+        />
+      )}
+
+      {passwordModal && (
+        <PasswordModal
+          title={passwordModal.title}
+          message={passwordModal.message}
+          onConfirm={passwordModal.action}
+          onCancel={() => setPasswordModal(null)}
         />
       )}
     </div>

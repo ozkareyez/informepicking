@@ -27,6 +27,7 @@ function mapOrder(row: any): Order {
     cargue_end: row.cargue_end ?? null,
     cargue_time: row.cargue_time ?? null,
     despachado_kg: Number(row.despachado_kg ?? 0),
+    devolucion_kg: Number(row.devolucion_kg ?? 0),
     created_by: row.created_by ?? '',
     created_at: row.created_at,
   };
@@ -329,23 +330,32 @@ export async function getDashboard(params: { period?: string; date?: string } = 
 
 // ─── 4-Week Trend Data ─────────────────────────────────────────────
 
+// ─── 4-Week Trend Data (ISO Week Numbers) ─────────────────────────────
+
 export async function getFourWeekTrend(): Promise<{
   production: { week: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
   despachos: { week: string; total_kg: number; total_vehiculos: number; avg_efficiency: number }[];
   descargues: { week: string; total_kg: number; total_ptm: number; avg_efficiency: number }[];
   citas: { week: string; total: number; cumplieron: number; pct_cumplimiento: number }[];
 }> {
+  // Get data from last ~5 weeks to ensure we have 4 complete weeks
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 35);
+  const startDateStr = startDate.toISOString().split('T')[0];
+
   const { data: ordersData, error: ordersError } = await getSupabase()
     .from('orders')
     .select('date, kg, kg_per_hour, efficiency, status, despachado_kg, created_at')
     .in('status', ['completed', 'despachado'])
+    .gte('date', startDateStr)
     .order('date', { ascending: true });
   
   if (ordersError) throw new Error(ordersError.message);
 
   const { data: despachosData, error: despError } = await getSupabase()
     .from('despachos')
-    .select('kg, created_at, cargue_time')
+    .select('kg, created_at, cargue_time, orders:order_id(type)')
+    .gte('created_at', startDateStr)
     .order('created_at', { ascending: true });
   
   if (despError) throw new Error(despError.message);
@@ -353,6 +363,7 @@ export async function getFourWeekTrend(): Promise<{
   const { data: unloadingsData, error: uncError } = await getSupabase()
     .from('unloadings')
     .select('kg, date, created_at, time_spent')
+    .gte('date', startDateStr)
     .order('created_at', { ascending: true });
   
   if (uncError) throw new Error(uncError.message);
@@ -360,63 +371,53 @@ export async function getFourWeekTrend(): Promise<{
   const { data: citasData, error: citasError } = await getSupabase()
     .from('citas_cargue')
     .select('cumplio_cita, created_at')
+    .gte('created_at', startDateStr)
     .order('created_at', { ascending: true });
   
   if (citasError) throw new Error(citasError.message);
 
-  // Generate last 4 weeks labels (Monday-Sunday)
-  const weeks: { label: string; start: string; end: string }[] = [];
-  const today = new Date();
-  for (let i = 3; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - d.getDay() - i * 7 + 1); // Monday
-    const start = d.toISOString().split('T')[0];
-    const end = new Date(d);
-    end.setDate(end.getDate() + 6); // Sunday
-    weeks.push({
-      label: `Sem ${Math.ceil((d.getDate() + (new Date(d.getFullYear(), d.getMonth(), 1).getDay() || 7) - 1) / 7)} ${d.toLocaleString('es', { month: 'short' })}`,
-      start,
-      end: end.toISOString().split('T')[0]
-    });
-  }
-
-  const mapToWeek = (dateStr: string) => {
-    for (const w of weeks) {
-      if (dateStr >= w.start && dateStr <= w.end) return w.label;
+  // Helper: ISO week number from date string
+  const getISOWeek = (dateStr: string): number => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const target = new Date(d.valueOf());
+    const dayNr = (d.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+      target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
     }
-    return null;
+    return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
   };
 
-  // Production by week
-  const prodByWeek = new Map<string, { kg: number; orders: number; sumEff: number }>();
+  // Production by ISO week
+  const prodByWeek = new Map<number, { kg: number; orders: number; sumEff: number }>();
   for (const o of ordersData || []) {
-    const w = mapToWeek(o.date);
-    if (!w) continue;
-    let acc = prodByWeek.get(w) || { kg: 0, orders: 0, sumEff: 0 };
+    const weekNum = getISOWeek(o.date);
+    let acc = prodByWeek.get(weekNum) || { kg: 0, orders: 0, sumEff: 0 };
     acc.kg += o.kg;
     acc.orders++;
     acc.sumEff += o.efficiency ?? 0;
-    prodByWeek.set(w, acc);
+    prodByWeek.set(weekNum, acc);
   }
 
-  const production = weeks.map(w => {
-    const d = prodByWeek.get(w.label);
-    return {
-      week: w.label,
-      total_kg: d?.kg ?? 0,
-      total_orders: d?.orders ?? 0,
-      avg_efficiency: d?.orders ? Math.round((d.sumEff / d.orders) * 100) / 100 : 0
-    };
-  });
+  const production = Array.from(prodByWeek.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([weekNum, d]) => ({
+      week: `Sem ${weekNum}`,
+      total_kg: d.kg,
+      total_orders: d.orders,
+      avg_efficiency: d.orders ? Math.round((d.sumEff / d.orders) * 100) / 100 : 0
+    }));
 
-  // Despachos by week
-  const despByWeek = new Map<string, { kg: number; vehiculos: number; sumEff: number }>();
+  // Despachos by ISO week
+  const despByWeek = new Map<number, { kg: number; vehiculos: number; sumEff: number }>();
   for (const d of despachosData || []) {
     const dateStr = d.created_at?.slice(0, 10);
-    const w = dateStr ? mapToWeek(dateStr) : null;
-    if (!w) continue;
-    let acc = despByWeek.get(w) || { kg: 0, vehiculos: 0, sumEff: 0 };
-    acc.kg += d.kg;
+    if (!dateStr) continue;
+    const weekNum = getISOWeek(dateStr);
+    let acc = despByWeek.get(weekNum) || { kg: 0, vehiculos: 0, sumEff: 0 };
+    acc.kg += Number(d.kg);
     acc.vehiculos++;
     const [sh, sm] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
     const [eh, em] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
@@ -424,65 +425,61 @@ export async function getFourWeekTrend(): Promise<{
     if (mins < 0) mins += 24 * 60;
     const hours = mins / 60;
     const kgph = hours > 0 ? d.kg / hours : 0;
-    acc.sumEff += Math.round((kgph / 4000) * 10000) / 100; // cargue standard 4000 kg/h
-    despByWeek.set(w, acc);
+    acc.sumEff += Math.round((kgph / 4000) * 10000) / 100;
+    despByWeek.set(weekNum, acc);
   }
 
-  const despachos = weeks.map(w => {
-    const d = despByWeek.get(w.label);
-    return {
-      week: w.label,
-      total_kg: d?.kg ?? 0,
-      total_vehiculos: d?.vehiculos ?? 0,
-      avg_efficiency: d?.vehiculos ? Math.round((d.sumEff / d.vehiculos) * 100) / 100 : 0
-    };
-  });
+  const despachos = Array.from(despByWeek.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([weekNum, d]) => ({
+      week: `Sem ${weekNum}`,
+      total_kg: d.kg,
+      total_vehiculos: d.vehiculos,
+      avg_efficiency: d.vehiculos ? Math.round((d.sumEff / d.vehiculos) * 100) / 100 : 0
+    }));
 
-  // Descargues by week
-  const uncByWeek = new Map<string, { kg: number; ptm: number; sumEff: number }>();
+  // Descargues by ISO week
+  const uncByWeek = new Map<number, { kg: number; ptm: number; sumEff: number }>();
   for (const u of unloadingsData || []) {
-    const w = mapToWeek(u.date);
-    if (!w) continue;
-    let acc = uncByWeek.get(w) || { kg: 0, ptm: 0, sumEff: 0 };
+    const weekNum = getISOWeek(u.date);
+    let acc = uncByWeek.get(weekNum) || { kg: 0, ptm: 0, sumEff: 0 };
     acc.kg += u.kg;
     acc.ptm++;
     const hours = parseTimeSpentToHours(u.time_spent);
     const kgph = hours > 0 ? u.kg / hours : 0;
-    acc.sumEff += Math.round((kgph / 66666.67) * 10000) / 100; // descargue standard
-    uncByWeek.set(w, acc);
+    acc.sumEff += Math.round((kgph / 66666.67) * 10000) / 100;
+    uncByWeek.set(weekNum, acc);
   }
 
-  const descargues = weeks.map(w => {
-    const d = uncByWeek.get(w.label);
-    return {
-      week: w.label,
-      total_kg: d?.kg ?? 0,
-      total_ptm: d?.ptm ?? 0,
-      avg_efficiency: d?.ptm ? Math.round((d.sumEff / d.ptm) * 100) / 100 : 0
-    };
-  });
+  const descargues = Array.from(uncByWeek.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([weekNum, d]) => ({
+      week: `Sem ${weekNum}`,
+      total_kg: d.kg,
+      total_ptm: d.ptm,
+      avg_efficiency: d.ptm ? Math.round((d.sumEff / d.ptm) * 100) / 100 : 0
+    }));
 
-  // Citas by week
-  const citasByWeek = new Map<string, { total: number; cumplieron: number }>();
+  // Citas by ISO week
+  const citasByWeek = new Map<number, { total: number; cumplieron: number }>();
   for (const c of citasData || []) {
     const dateStr = c.created_at?.slice(0, 10);
-    const w = dateStr ? mapToWeek(dateStr) : null;
-    if (!w) continue;
-    let acc = citasByWeek.get(w) || { total: 0, cumplieron: 0 };
+    if (!dateStr) continue;
+    const weekNum = getISOWeek(dateStr);
+    let acc = citasByWeek.get(weekNum) || { total: 0, cumplieron: 0 };
     acc.total++;
     if (c.cumplio_cita === true) acc.cumplieron++;
-    citasByWeek.set(w, acc);
+    citasByWeek.set(weekNum, acc);
   }
 
-  const citas = weeks.map(w => {
-    const d = citasByWeek.get(w.label);
-    return {
-      week: w.label,
-      total: d?.total ?? 0,
-      cumplieron: d?.cumplieron ?? 0,
-      pct_cumplimiento: d?.total ? Math.round((d.cumplieron / d.total) * 10000) / 100 : 0
-    };
-  });
+  const citas = Array.from(citasByWeek.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([weekNum, d]) => ({
+      week: `Sem ${weekNum}`,
+      total: d.total,
+      cumplieron: d.cumplieron,
+      pct_cumplimiento: d.total ? Math.round((d.cumplieron / d.total) * 10000) / 100 : 0
+    }));
 
   return { production, despachos, descargues, citas };
 }
@@ -726,7 +723,72 @@ export async function createDespacho(orderId: number, data: {
   return mapDespacho(despacho);
 }
 
-// ─── Todos los despachos (para Excel) ─────────────────────────
+// ─── Despachos - Edición y Devolución ────────────────────────────
+
+async function validateAdminPassword(password: string): Promise<void> {
+  const { data, error } = await getSupabase()
+    .from('usuarios')
+    .select('username')
+    .in('username', ['oscar', 'dumar'])
+    .eq('password', password);
+  if (error) throw new Error('Error validando contraseña');
+  if (!data || data.length === 0) throw new Error('Contraseña incorrecta. Solo oscar y dumar pueden realizar esta acción.');
+}
+
+export async function updateDespachoKg(despachoId: number, newKg: number, password: string): Promise<void> {
+  await validateAdminPassword(password);
+
+  const { data: despacho, error: fetchError } = await getSupabase().from('despachos').select('kg, order_id').eq('id', despachoId).single();
+  if (fetchError || !despacho) throw new Error('Despacho no encontrado');
+
+  const oldKg = Number(despacho.kg);
+  const diff = newKg - oldKg;
+
+  const { data: order } = await getSupabase().from('orders').select('kg, despachado_kg').eq('id', despacho.order_id).single();
+  if (!order) throw new Error('Pedido no encontrado');
+
+  const currentDespachado = Number(order?.despachado_kg ?? 0);
+  const newDespachado = currentDespachado + diff;
+  const totalKg = Number(order?.kg ?? 0);
+
+  if (newDespachado < 0) throw new Error('El peso despachado no puede ser negativo');
+  if (newDespachado > totalKg) throw new Error(`El total despachado (${newDespachado} kg) no puede exceder el total del pedido (${totalKg} kg)`);
+
+  const { error: updateError } = await getSupabase().from('despachos').update({ kg: newKg }).eq('id', despachoId);
+  if (updateError) throw new Error(updateError.message);
+
+  const newStatus = newDespachado >= totalKg ? 'despachado' : 'completed';
+  await getSupabase().from('orders').update({
+    despachado_kg: newDespachado,
+    status: newStatus,
+  }).eq('id', despacho.order_id);
+}
+
+export async function finishOrderWithDevolucion(orderId: number, devolucionKg: number, password: string): Promise<Order> {
+  await validateAdminPassword(password);
+
+  const { data: order, error: fetchError } = await getSupabase().from('orders').select('kg, despachado_kg, devolucion_kg, status').eq('id', orderId).single();
+  if (fetchError || !order) throw new Error('Pedido no encontrado');
+
+  const currentDespachado = Number(order?.despachado_kg ?? 0);
+  const currentDevolucion = Number(order?.devolucion_kg ?? 0);
+  const totalKg = Number(order?.kg ?? 0);
+  const newDevolucion = currentDevolucion + devolucionKg;
+  const totalAccounted = currentDespachado + newDevolucion;
+
+  if (devolucionKg < 0) throw new Error('La devolución no puede ser negativa');
+  if (totalAccounted > totalKg) throw new Error(`La devolución (${devolucionKg} kg) excede el saldo disponible`);
+
+  const newStatus = totalAccounted >= totalKg ? 'despachado' : order.status;
+
+  const { data: updatedOrder, error: updateError } = await getSupabase().from('orders').update({
+    devolucion_kg: newDevolucion,
+    status: newStatus,
+  }).eq('id', orderId).select().single();
+  if (updateError) throw new Error(updateError.message);
+
+  return mapOrder(updatedOrder);
+}
 
 export async function getAllDespachos(): Promise<Despacho[]> {
   const { data, error } = await getSupabase().from('despachos').select('*').order('created_at', { ascending: false });

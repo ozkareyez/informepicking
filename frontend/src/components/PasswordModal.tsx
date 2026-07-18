@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lock, X } from 'lucide-react';
+import { Lock, X, Eye, EyeOff } from 'lucide-react';
 
 interface Props {
   title: string;
@@ -13,6 +13,7 @@ export default function PasswordModal({ title, message, onConfirm, onCancel, lab
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -40,20 +41,33 @@ export default function PasswordModal({ title, message, onConfirm, onCancel, lab
             <Lock className="w-4 h-4 text-orange-500" />
             {title}
           </h2>
-          <button onClick={onCancel} className="p-1 rounded-lg hover:bg-gray-100 text-gray-500">
+          <button onClick={onCancel} className="p-1 rounded hover:bg-gray-100 text-gray-500">
             <X className="w-4 h-4" />
           </button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           <p className="text-sm text-gray-600">{message}</p>
-          <input
-            type="password"
-            value={password}
-            onChange={e => { setPassword(e.target.value); setError(''); }}
-            placeholder={label}
-            className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
-            autoFocus
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
+              placeholder={label}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 pr-10"
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              {showPassword ? (
+                <EyeOff className="w-5 h-5" />
+              ) : (
+                <Eye className="w-5 h-5" />
+              )}
+            </button>
+          </div>
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex gap-3 justify-end pt-1">
             <button type="button" onClick={onCancel} disabled={loading}
