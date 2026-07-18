@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { BrowserRouter } from 'react-router-dom';
 import { ToastContainer, toast } from './components/Toast';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -112,59 +113,61 @@ export default function App() {
   if (!user) return <LoginScreen />;
 
   return (
-    <div className="page">
-      <Sidebar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        pendingCount={pendingCount}
-        unassignedCount={unassignedCount}
-        citasPendientes={citasPendientes}
-        novedadesPendientes={novedadesPendientes}
-        user={user}
-        onLogout={logout}
-      />
-
-      <main className="main-content">
-        <div className="content">
-          {/* Dashboards especializados */}
-          {activeTab === 'dash-produccion' && <DashboardProduccion key="dash-produccion" />}
-          {activeTab === 'dash-despacho' && <DashboardDespacho key="dash-despacho" />}
-          {activeTab === 'dash-descargue' && <DashboardDescargue key="dash-descargue" />}
-          {activeTab === 'dash-citas' && <DashboardCitas key="dash-citas" />}
-          {activeTab === 'dash-bodega' && <DashboardBodega key="dash-bodega" />}
-          
-          {/* Proceso de Cargue */}
-          {activeTab === 'registro' && <OrderForm onSubmit={handleRegister} />}
-          {activeTab === 'pendientes' && <PendingOrders onCompleted={handleOrderCompleted} onAssignOperator={handleAssignOperator} />}
-          {activeTab === 'despacho' && <DispatchView onOrderChange={triggerRefresh} />}
-          {activeTab === 'citas' && <CitasCargueView onDispatchFromCita={handleDispatchFromCita} />}
-
-          {/* Proceso de Descargue */}
-          {activeTab === 'descargue' && <UnloadingView />}
-          {activeTab === 'novedades' && <NovedadesDescargueView />}
-
-          {/* Administración */}
-          {activeTab === 'pedidos' && (
-            <OrderTable
-              refreshTrigger={refreshTrigger}
-              onEdit={handleEdit}
-              onDelete={handleDelete}
-            />
-          )}
-          {activeTab === 'operarios' && <OperatorView />}
-          {activeTab === 'estadisticas' && <Statistics />}
-        </div>
-      </main>
-
-      <ThirtyMinuteAlert />
-      <ToastContainer />
-      {editingOrder && (
-        <EditOrderModal
-          order={editingOrder}
-          onSave={handleEditSave}
-          onClose={() => setEditingOrder(null)}
+    <BrowserRouter>
+      <div className="page">
+        <Sidebar
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          pendingCount={pendingCount}
+          unassignedCount={unassignedCount}
+          citasPendientes={citasPendientes}
+          novedadesPendientes={novedadesPendientes}
+          user={user}
+          onLogout={logout}
         />
-      )}
-    </div>
+
+        <main className="main-content">
+          <div className="content">
+            {/* Dashboards especializados */}
+            {activeTab === 'dash-produccion' && <DashboardProduccion key="dash-produccion" />}
+            {activeTab === 'dash-despacho' && <DashboardDespacho key="dash-despacho" />}
+            {activeTab === 'dash-descargue' && <DashboardDescargue key="dash-descargue" />}
+            {activeTab === 'dash-citas' && <DashboardCitas key="dash-citas" />}
+            {activeTab === 'dash-bodega' && <DashboardBodega key="dash-bodega" />}
+            
+            {/* Proceso de Cargue */}
+            {activeTab === 'registro' && <OrderForm onSubmit={handleRegister} />}
+            {activeTab === 'pendientes' && <PendingOrders onCompleted={handleOrderCompleted} onAssignOperator={handleAssignOperator} />}
+            {activeTab === 'despacho' && <DispatchView onOrderChange={triggerRefresh} />}
+            {activeTab === 'citas' && <CitasCargueView onDispatchFromCita={handleDispatchFromCita} />}
+
+            {/* Proceso de Descargue */}
+            {activeTab === 'descargue' && <UnloadingView />}
+            {activeTab === 'novedades' && <NovedadesDescargueView />}
+
+            {/* Administración */}
+            {activeTab === 'pedidos' && (
+              <OrderTable
+                refreshTrigger={refreshTrigger}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            )}
+            {activeTab === 'operarios' && <OperatorView />}
+            {activeTab === 'estadisticas' && <Statistics />}
+          </div>
+        </main>
+
+        <ThirtyMinuteAlert />
+        <ToastContainer />
+        {editingOrder && (
+          <EditOrderModal
+            order={editingOrder}
+            onSave={handleEditSave}
+            onClose={() => setEditingOrder(null)}
+          />
+        )}
+      </div>
+    </BrowserRouter>
   );
 }
