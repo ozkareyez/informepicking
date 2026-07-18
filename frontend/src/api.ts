@@ -180,3 +180,24 @@ export async function updateRack(id: number, data: { ocupacion: number }): Promi
 export async function deleteRack(id: number): Promise<void> {
   return active.deleteRack(id);
 }
+
+// ─── Type-Based Weekly KPIs ────────────────────────────────────────
+
+export async function getTypeBasedWeeklyKPIs(): Promise<{
+  production: { week: string; type: string; orders: number; kg: number; skus: number; avg_efficiency: number }[];
+  despachos: { week: string; type: string; kg: number; vehiculos: number; avg_efficiency: number }[];
+}> {
+  return active.getTypeBasedWeeklyKPIs();
+}
+
+// ─── 4-Week Trend ────────────────────────────────────────────────────
+
+export async function getFourWeekTrend(): Promise<{
+  production: { week: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
+  despachos: { week: string; total_kg: number; total_vehiculos: number; avg_efficiency: number }[];
+  descargues: { week: string; total_kg: number; total_ptm: number; avg_efficiency: number }[];
+  citas: { week: string; total: number; cumplieron: number; pct_cumplimiento: number }[];
+}> {
+  return active.getFourWeekTrend();
+}
+

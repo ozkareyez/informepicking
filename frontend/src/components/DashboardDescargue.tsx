@@ -4,11 +4,18 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { getDashboard, getUnloadings } from '../api';
+import { getDashboard, getUnloadings, getFourWeekTrend } from '../api';
 import type { DashboardData, Unloading } from '../types';
 import { formatEfficiency, getDescargueStandardKgPerHour, getToday, getWeekNumber, getWeekRange, formatNumber } from '../utils';
+import { CHART_COLORS, PIE_TWO_COLORS, BAR_GROUPED, LINE_COLORS } from '../utils/chartColors';
 
-const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1d4ed8', '#db2777', '#f59e0b'];
+// Types for 4-week trend
+interface FourWeekTrend {
+  production: { week: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
+  despachos: { week: string; total_kg: number; total_vehiculos: number; avg_efficiency: number }[];
+  descargues: { week: string; total_kg: number; total_ptm: number; avg_efficiency: number }[];
+  citas: { week: string; total: number; cumplieron: number; pct_cumplimiento: number }[];
+}
 
 function KpiCard({ icon: Icon, label, value, color, trend, trendLabel }: {
   icon: any; label: string; value: string; color: string; trend?: number; trendLabel?: string;
@@ -37,6 +44,7 @@ type Period = '' | 'day' | 'week' | 'month';
 
 export default function DashboardDescargue() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [trend, setTrend] = useState<FourWeekTrend | null>(null);
   const [loading, setLoading] = useState(true);
   const [unloadings, setUnloadings] = useState<Unloading[]>([]);
   const [novTotal, setNovTotal] = useState(0);
@@ -55,9 +63,14 @@ export default function DashboardDescargue() {
           params.period = period;
           params.date = date;
         }
-        const [dash, unc] = await Promise.all([getDashboard(params), getUnloadings()]);
+        const [dash, unc, trendData] = await Promise.all([
+          getDashboard(params),
+          getUnloadings(),
+          getFourWeekTrend(),
+        ]);
         setData(dash);
         setUnloadings(unc);
+        setTrend(trendData);
         const total = unc.filter(u => u.novedad).length;
         const resueltas = unc.filter(u => u.novedad && u.novedad_resuelta).length;
         setNovTotal(total);
@@ -167,11 +180,11 @@ export default function DashboardDescargue() {
           </h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={unloadings.slice(0, 10)}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
               <XAxis dataKey="ptm" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
               <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => formatNumber(Number(v))} />
-              <Bar dataKey="kg" fill="#10b981" radius={[6, 6, 0, 0]} name="Kg" />
+              <Bar dataKey="kg" fill={CHART_COLORS.PRIMARY} radius={[6, 6, 0, 0]} name="Kg" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -183,11 +196,11 @@ export default function DashboardDescargue() {
           </h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={unloadings.slice(0, 10)}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
               <XAxis dataKey="ptm" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
               <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => formatNumber(Number(v))} />
-              <Bar dataKey="kg" fill="#3b82f6" radius={[6, 6, 0, 0]} name="Horas" />
+              <Bar dataKey="kg" fill={CHART_COLORS.SECONDARY} radius={[6, 6, 0, 0]} name="Horas" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -217,7 +230,7 @@ export default function DashboardDescargue() {
           </h3>
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
-              <Pie
+<Pie
                 data={unloadings.slice(0, 10)}
                 cx="50%" cy="50%"
                 labelLine={false}
@@ -226,7 +239,7 @@ export default function DashboardDescargue() {
                 dataKey="kg" nameKey="ptm"
               >
                 {unloadings.slice(0, 10).map((_, index) => (
-                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                  <Cell key={index} fill={PIE_TWO_COLORS[index % PIE_TWO_COLORS.length]} />
                 ))}
               </Pie>
               <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => formatNumber(Number(v))} />

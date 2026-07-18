@@ -327,6 +327,273 @@ export async function getDashboard(params: { period?: string; date?: string } = 
   };
 }
 
+// ─── 4-Week Trend Data ─────────────────────────────────────────────
+
+export async function getFourWeekTrend(): Promise<{
+  production: { week: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
+  despachos: { week: string; total_kg: number; total_vehiculos: number; avg_efficiency: number }[];
+  descargues: { week: string; total_kg: number; total_ptm: number; avg_efficiency: number }[];
+  citas: { week: string; total: number; cumplieron: number; pct_cumplimiento: number }[];
+}> {
+  const { data: ordersData, error: ordersError } = await getSupabase()
+    .from('orders')
+    .select('date, kg, kg_per_hour, efficiency, status, despachado_kg, created_at')
+    .in('status', ['completed', 'despachado'])
+    .order('date', { ascending: true });
+  
+  if (ordersError) throw new Error(ordersError.message);
+
+  const { data: despachosData, error: despError } = await getSupabase()
+    .from('despachos')
+    .select('kg, created_at, cargue_time')
+    .order('created_at', { ascending: true });
+  
+  if (despError) throw new Error(despError.message);
+
+  const { data: unloadingsData, error: uncError } = await getSupabase()
+    .from('unloadings')
+    .select('kg, date, created_at, time_spent')
+    .order('created_at', { ascending: true });
+  
+  if (uncError) throw new Error(uncError.message);
+
+  const { data: citasData, error: citasError } = await getSupabase()
+    .from('citas_cargue')
+    .select('cumplio_cita, created_at')
+    .order('created_at', { ascending: true });
+  
+  if (citasError) throw new Error(citasError.message);
+
+  // Generate last 4 weeks labels (Monday-Sunday)
+  const weeks: { label: string; start: string; end: string }[] = [];
+  const today = new Date();
+  for (let i = 3; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - d.getDay() - i * 7 + 1); // Monday
+    const start = d.toISOString().split('T')[0];
+    const end = new Date(d);
+    end.setDate(end.getDate() + 6); // Sunday
+    weeks.push({
+      label: `Sem ${Math.ceil((d.getDate() + (new Date(d.getFullYear(), d.getMonth(), 1).getDay() || 7) - 1) / 7)} ${d.toLocaleString('es', { month: 'short' })}`,
+      start,
+      end: end.toISOString().split('T')[0]
+    });
+  }
+
+  const mapToWeek = (dateStr: string) => {
+    for (const w of weeks) {
+      if (dateStr >= w.start && dateStr <= w.end) return w.label;
+    }
+    return null;
+  };
+
+  // Production by week
+  const prodByWeek = new Map<string, { kg: number; orders: number; sumEff: number }>();
+  for (const o of ordersData || []) {
+    const w = mapToWeek(o.date);
+    if (!w) continue;
+    let acc = prodByWeek.get(w) || { kg: 0, orders: 0, sumEff: 0 };
+    acc.kg += o.kg;
+    acc.orders++;
+    acc.sumEff += o.efficiency ?? 0;
+    prodByWeek.set(w, acc);
+  }
+
+  const production = weeks.map(w => {
+    const d = prodByWeek.get(w.label);
+    return {
+      week: w.label,
+      total_kg: d?.kg ?? 0,
+      total_orders: d?.orders ?? 0,
+      avg_efficiency: d?.orders ? Math.round((d.sumEff / d.orders) * 100) / 100 : 0
+    };
+  });
+
+  // Despachos by week
+  const despByWeek = new Map<string, { kg: number; vehiculos: number; sumEff: number }>();
+  for (const d of despachosData || []) {
+    const dateStr = d.created_at?.slice(0, 10);
+    const w = dateStr ? mapToWeek(dateStr) : null;
+    if (!w) continue;
+    let acc = despByWeek.get(w) || { kg: 0, vehiculos: 0, sumEff: 0 };
+    acc.kg += d.kg;
+    acc.vehiculos++;
+    const [sh, sm] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
+    const [eh, em] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
+    let mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins < 0) mins += 24 * 60;
+    const hours = mins / 60;
+    const kgph = hours > 0 ? d.kg / hours : 0;
+    acc.sumEff += Math.round((kgph / 4000) * 10000) / 100; // cargue standard 4000 kg/h
+    despByWeek.set(w, acc);
+  }
+
+  const despachos = weeks.map(w => {
+    const d = despByWeek.get(w.label);
+    return {
+      week: w.label,
+      total_kg: d?.kg ?? 0,
+      total_vehiculos: d?.vehiculos ?? 0,
+      avg_efficiency: d?.vehiculos ? Math.round((d.sumEff / d.vehiculos) * 100) / 100 : 0
+    };
+  });
+
+  // Descargues by week
+  const uncByWeek = new Map<string, { kg: number; ptm: number; sumEff: number }>();
+  for (const u of unloadingsData || []) {
+    const w = mapToWeek(u.date);
+    if (!w) continue;
+    let acc = uncByWeek.get(w) || { kg: 0, ptm: 0, sumEff: 0 };
+    acc.kg += u.kg;
+    acc.ptm++;
+    const hours = parseTimeSpentToHours(u.time_spent);
+    const kgph = hours > 0 ? u.kg / hours : 0;
+    acc.sumEff += Math.round((kgph / 66666.67) * 10000) / 100; // descargue standard
+    uncByWeek.set(w, acc);
+  }
+
+  const descargues = weeks.map(w => {
+    const d = uncByWeek.get(w.label);
+    return {
+      week: w.label,
+      total_kg: d?.kg ?? 0,
+      total_ptm: d?.ptm ?? 0,
+      avg_efficiency: d?.ptm ? Math.round((d.sumEff / d.ptm) * 100) / 100 : 0
+    };
+  });
+
+  // Citas by week
+  const citasByWeek = new Map<string, { total: number; cumplieron: number }>();
+  for (const c of citasData || []) {
+    const dateStr = c.created_at?.slice(0, 10);
+    const w = dateStr ? mapToWeek(dateStr) : null;
+    if (!w) continue;
+    let acc = citasByWeek.get(w) || { total: 0, cumplieron: 0 };
+    acc.total++;
+    if (c.cumplio_cita === true) acc.cumplieron++;
+    citasByWeek.set(w, acc);
+  }
+
+  const citas = weeks.map(w => {
+    const d = citasByWeek.get(w.label);
+    return {
+      week: w.label,
+      total: d?.total ?? 0,
+      cumplieron: d?.cumplieron ?? 0,
+      pct_cumplimiento: d?.total ? Math.round((d.cumplieron / d.total) * 10000) / 100 : 0
+    };
+  });
+
+  return { production, despachos, descargues, citas };
+}
+
+// ─── Type-Based Weekly KPIs ────────────────────────────────────────
+
+export async function getTypeBasedWeeklyKPIs(): Promise<{
+  production: { week: string; type: string; orders: number; kg: number; skus: number; avg_efficiency: number }[];
+  despachos: { week: string; type: string; kg: number; vehiculos: number; avg_efficiency: number }[];
+}> {
+  const { data: ordersData, error: ordersError } = await getSupabase()
+    .from('orders')
+    .select('date, kg, type, sku, efficiency, status, despachado_kg, created_at')
+    .in('status', ['completed', 'despachado'])
+    .order('date', { ascending: true });
+  
+  if (ordersError) throw new Error(ordersError.message);
+
+  const { data: despachosData, error: despError } = await getSupabase()
+    .from('despachos')
+    .select('kg, created_at, cargue_time, orders:order_id(type)')
+    .order('created_at', { ascending: true });
+  
+  if (despError) throw new Error(despError.message);
+
+  // Generate last 4 weeks labels
+  const weeks: { label: string; start: string; end: string }[] = [];
+  const today = new Date();
+  for (let i = 3; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - d.getDay() - i * 7 + 1); // Monday
+    const start = d.toISOString().split('T')[0];
+    const end = new Date(d);
+    end.setDate(end.getDate() + 6);
+    weeks.push({
+      label: `Sem ${Math.ceil((d.getDate() + (new Date(d.getFullYear(), d.getMonth(), 1).getDay() || 7) - 1) / 7)} ${d.toLocaleString('es', { month: 'short' })}`,
+      start,
+      end: end.toISOString().split('T')[0]
+    });
+  }
+
+  const mapToWeek = (dateStr: string) => {
+    for (const w of weeks) {
+      if (dateStr >= w.start && dateStr <= w.end) return w.label;
+    }
+    return null;
+  };
+
+  // Production by type and week
+  const prodByTypeWeek = new Map<string, Map<string, { orders: number; kg: number; skus: Set<string>; sumEff: number }>>();
+  for (const o of ordersData || []) {
+    const w = mapToWeek(o.date);
+    if (!w) continue;
+    if (!prodByTypeWeek.has(w)) prodByTypeWeek.set(w, new Map());
+    const typeMap = prodByTypeWeek.get(w)!;
+    let acc = typeMap.get(o.type) || { orders: 0, kg: 0, skus: new Set(), sumEff: 0 };
+    acc.orders++;
+    acc.kg += o.kg;
+    acc.skus.add(o.sku);
+    acc.sumEff += o.efficiency ?? 0;
+    typeMap.set(o.type, acc);
+  }
+
+  const production = weeks.flatMap(w => {
+    const typeMap = prodByTypeWeek.get(w.label) || new Map();
+    return Array.from(typeMap.entries()).map(([type, d]) => ({
+      week: w.label,
+      type,
+      orders: d.orders,
+      kg: d.kg,
+      skus: d.skus.size,
+      avg_efficiency: d.orders ? Math.round((d.sumEff / d.orders) * 100) / 100 : 0
+    }));
+  });
+
+  // Despachos by type and week
+  const despByTypeWeek = new Map<string, Map<string, { kg: number; vehiculos: number; sumEff: number }>>();
+  for (const d of despachosData || []) {
+    const dateStr = d.created_at?.slice(0, 10);
+    const w = dateStr ? mapToWeek(dateStr) : null;
+    if (!w) continue;
+    const orderType = d.orders?.[0]?.type || 'Masivo';
+    if (!despByTypeWeek.has(w)) despByTypeWeek.set(w, new Map());
+    const typeMap = despByTypeWeek.get(w)!;
+    let acc = typeMap.get(orderType) || { kg: 0, vehiculos: 0, sumEff: 0 };
+    acc.kg += Number(d.kg);
+    acc.vehiculos++;
+    const [sh, sm] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
+    const [eh, em] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
+    let mins = (eh * 60 + em) - (sh * 60 + sm);
+    if (mins < 0) mins += 24 * 60;
+    const hours = mins / 60;
+    const kgph = hours > 0 ? d.kg / hours : 0;
+    acc.sumEff += Math.round((kgph / 4000) * 10000) / 100;
+    despByTypeWeek.set(w, typeMap);
+  }
+
+  const despachos = weeks.flatMap(w => {
+    const typeMap = despByTypeWeek.get(w.label) || new Map();
+    return Array.from(typeMap.entries()).map(([type, d]) => ({
+      week: w.label,
+      type,
+      kg: d.kg,
+      vehiculos: d.vehiculos,
+      avg_efficiency: d.vehiculos ? Math.round((d.sumEff / d.vehiculos) * 100) / 100 : 0
+    }));
+  });
+
+  return { production, despachos };
+}
+
 export async function getStatistics(params: { operator?: string; period?: string; date?: string } = {}): Promise<StatisticsData> {
   let query = getSupabase().from('orders').select('*').in('status', ['completed', 'despachado']);
 

@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Scale, Truck, MapPin, Gauge, AlertTriangle, ArrowUpRight, ArrowDownRight, CheckCircle, Calendar, BarChart2, LineChart as LineChartIcon } from 'lucide-react';
+import { Scale, Truck, MapPin, Gauge, AlertTriangle, ArrowUpRight, ArrowDownRight, CheckCircle, Calendar, BarChart2, LineChart as LineChartIcon, CheckCircle as CheckCircleIcon, Container } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend, LineChart, Line
 } from 'recharts';
-import { getDashboard, getOrdersForDispatch, getDespachos } from '../api';
+import { getDashboard, getOrdersForDispatch, getDespachos, getFourWeekTrend } from '../api';
 import type { DashboardData, Order, Despacho } from '../types';
 import { getOverdueDays, getCargueStandardKgPerHour, formatEfficiency, getToday, getWeekRange, getWeekNumber, formatNumber } from '../utils';
+import { CHART_COLORS, PIE_TWO_COLORS, BAR_GROUPED, LINE_COLORS } from '../utils/chartColors';
 
-const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#bfdbfe', '#1d4ed8', '#db2777', '#f59e0b'];
+interface FourWeekTrend {
+  production: { week: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
+  despachos: { week: string; total_kg: number; total_vehiculos: number; avg_efficiency: number }[];
+  descargues: { week: string; total_kg: number; total_ptm: number; avg_efficiency: number }[];
+  citas: { week: string; total: number; cumplieron: number; pct_cumplimiento: number }[];
+}
 
 function KpiCard({ icon: Icon, label, value, color, trend, trendLabel }: {
   icon: any; label: string; value: string; color: string; trend?: number; trendLabel?: string;
@@ -37,6 +43,7 @@ type Period = '' | 'day' | 'week' | 'month';
 
 export default function DashboardDespacho() {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [trend, setTrend] = useState<FourWeekTrend | null>(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<Period>('');
   const [date, setDate] = useState(getToday());
@@ -53,12 +60,14 @@ export default function DashboardDespacho() {
     const per = p ?? period;
     const dt = d ?? date;
     try {
-      const [dash, pending, allDespachos] = await Promise.all([
+      const [dash, pending, allDespachos, trendData] = await Promise.all([
         getDashboard(per ? { period: per, date: dt } : {}),
         getOrdersForDispatch(),
         getDespachos(0),
+        getFourWeekTrend(),
       ]);
       setData(dash);
+      setTrend(trendData);
       let count = 0, d1 = 0, many = 0;
       for (const o of pending) {
         const od = getOverdueDays(o.date, o.type);
@@ -195,7 +204,7 @@ export default function DashboardDespacho() {
               <XAxis dataKey="ruta" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
               <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => formatNumber(Number(v))} />
-              <Bar dataKey="kg" fill="#2563eb" radius={[6, 6, 0, 0]} name="Kg" />
+              <Bar dataKey="kg" fill={CHART_COLORS.PRIMARY} radius={[6, 6, 0, 0]} name="Kg" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -215,9 +224,7 @@ export default function DashboardDespacho() {
                 outerRadius={80}
                 dataKey="vehiculos" nameKey="ruta"
               >
-                {data.productionByType.map((_, index) => (
-                  <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                ))}
+                <Cell fill={PIE_TWO_COLORS[0]} />
               </Pie>
               <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => formatNumber(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -244,8 +251,8 @@ export default function DashboardDespacho() {
               <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="%" />
               <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => formatNumber(Number(v))} />
-              <Line yAxisId="left" type="monotone" dataKey="eficiencia" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3, fill: '#8b5cf6' }} name="Eficiencia %" />
-              <Line yAxisId="right" type="monotone" dataKey="eficiencia" stroke="#2563eb" strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: '#2563eb' }} name="Estándar 100%" />
+              <Line yAxisId="left" type="monotone" dataKey="eficiencia" stroke={CHART_COLORS.PRIMARY} strokeWidth={2.5} dot={{ r: 3, fill: CHART_COLORS.PRIMARY }} name="Eficiencia %" />
+              <Line yAxisId="right" type="monotone" dataKey="eficiencia" stroke={CHART_COLORS.SECONDARY} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: CHART_COLORS.SECONDARY }} name="Estándar 100%" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -261,7 +268,7 @@ export default function DashboardDespacho() {
               <XAxis dataKey="vehiculo" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
               <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), 'kg/vehículo']} />
-              <Bar dataKey="kg" fill="#10b981" radius={[6, 6, 0, 0]} name="Kg/vehículo" />
+              <Bar dataKey="kg" fill={CHART_COLORS.SECONDARY} radius={[6, 6, 0, 0]} name="Kg/vehículo" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -315,6 +322,108 @@ export default function DashboardDespacho() {
           <p className="text-xs mt-1 text-gray-500">Estándar: {getCargueStandardKgPerHour().toLocaleString()} kg/h</p>
         </div>
       </div>
+
+      {/* ── 4-Week Trend Comparison ── */}
+      {trend && (
+        <div className="space-y-5">
+          <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-blue-600" />
+            Comparativa 4 Semanas
+          </h2>
+
+          {/* Despachos 4 weeks */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+              <Truck className="w-4 h-4 text-blue-600" />
+              Kg Despachados - Últimas 4 Semanas
+            </h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={trend.despachos}>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
+                <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), 'kg']} />
+                <Legend />
+                <Bar dataKey="total_kg" fill={CHART_COLORS.PRIMARY} radius={[6, 6, 0, 0]} name="Kg" />
+                <Bar dataKey="total_vehiculos" fill={CHART_COLORS.SECONDARY} radius={[6, 6, 0, 0]} name="Vehículos" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Eficiencia 4 weeks */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                <Gauge className="w-4 h-4 text-purple-600" />
+                Eficiencia Despacho - 4 Semanas
+              </h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={trend.despachos}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
+                  <XAxis dataKey="week" tick={{ fontSize: 10 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="%" tickFormatter={v => formatNumber(Number(v))} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => formatNumber(Number(v))} />
+                  <Line yAxisId="left" type="monotone" dataKey="total_kg" stroke={LINE_COLORS[0]} strokeWidth={2.5} dot={{ r: 3, fill: LINE_COLORS[0] }} name="Kg" />
+                  <Line yAxisId="right" type="monotone" dataKey="avg_efficiency" stroke={LINE_COLORS[2]} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: LINE_COLORS[2] }} name="Eficiencia %" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                <Container className="w-4 h-4 text-blue-600" />
+                Eficiencia Descargue - 4 Semanas
+              </h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={trend.descargues}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
+                  <XAxis dataKey="week" tick={{ fontSize: 10 }} />
+                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+                  <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="%" tickFormatter={v => formatNumber(Number(v))} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => formatNumber(Number(v))} />
+                  <Line yAxisId="left" type="monotone" dataKey="total_kg" stroke={LINE_COLORS[0]} strokeWidth={2.5} dot={{ r: 3, fill: LINE_COLORS[0] }} name="Kg" />
+                  <Line yAxisId="right" type="monotone" dataKey="avg_efficiency" stroke={LINE_COLORS[2]} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: LINE_COLORS[2] }} name="Eficiencia %" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                Cumplimiento Citas - 4 Semanas
+              </h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={trend.citas}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
+                  <XAxis dataKey="week" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), 'citas']} />
+                  <Legend />
+                  <Bar dataKey="total" fill={CHART_COLORS.PRIMARY} radius={[6, 6, 0, 0]} name="Total Citas" />
+                  <Bar dataKey="cumplieron" fill={CHART_COLORS.SEM_SUCCESS} radius={[6, 6, 0, 0]} name="Cumplieron" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-1.5">
+                <BarChart2 className="w-4 h-4 text-purple-600" />
+                % Cumplimiento Citas
+              </h3>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={trend.citas}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
+                  <XAxis dataKey="week" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} unit="%" tickFormatter={v => formatNumber(Number(v))} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), '%']} />
+                  <Line type="monotone" dataKey="pct_cumplimiento" stroke={LINE_COLORS[2]} strokeWidth={3} dot={{ r: 4, fill: LINE_COLORS[2] }} name="% Cumplimiento" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Retrasos ── */}
       <div className="bg-red-50 rounded-xl border border-red-200 p-4">

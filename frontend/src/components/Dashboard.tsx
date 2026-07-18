@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Package, Truck, Container, CalendarDays } from 'lucide-react';
+import { Package, Truck, Container, CalendarDays, BarChart2, TrendingUp } from 'lucide-react';
 import DashboardProduccion from './DashboardProduccion';
 import DashboardDespacho from './DashboardDespacho';
 import DashboardDescargue from './DashboardDescargue';
 import DashboardCitas from './DashboardCitas';
+import TypeBasedWeeklyKPIs from './TypeBasedWeeklyKPIs';
 
-type DashboardTab = 'produccion' | 'despacho' | 'descargue' | 'citas';
+type DashboardTab = 'produccion' | 'despacho' | 'descargue' | 'citas' | 'kpis-semanales';
 
 interface TabDef {
   id: DashboardTab;
@@ -18,6 +19,7 @@ const TABS: TabDef[] = [
   { id: 'despacho', label: 'Despacho', icon: Truck },
   { id: 'descargue', label: 'Descargue', icon: Container },
   { id: 'citas', label: 'Citas Cargue', icon: CalendarDays },
+  { id: 'kpis-semanales', label: 'KPIs Semanales', icon: BarChart2 },
 ];
 
 export default function Dashboard() {
@@ -47,6 +49,7 @@ export default function Dashboard() {
       {activeTab === 'despacho' && <DashboardDespacho />}
       {activeTab === 'descargue' && <DashboardDescargue />}
       {activeTab === 'citas' && <DashboardCitas />}
+      {activeTab === 'kpis-semanales' && <TypeBasedWeeklyKPIs />}
     </div>
   );
 }

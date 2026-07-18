@@ -180,3 +180,8 @@ export interface RackFormData {
 export interface RackUpdateData {
   ocupacion: number;
 }
+
+export interface TypeBasedWeeklyKPIs {
+  production: { week: string; type: string; orders: number; kg: number; skus: number; avg_efficiency: number }[];
+  despachos: { week: string; type: string; kg: number; vehiculos: number; avg_efficiency: number }[];
+}

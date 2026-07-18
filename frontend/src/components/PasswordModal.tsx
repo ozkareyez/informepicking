@@ -4,23 +4,31 @@ import { Lock, X } from 'lucide-react';
 interface Props {
   title: string;
   message: string;
-  onConfirm: () => Promise<void>;
+  onConfirm: (password: string) => Promise<void>;
   onCancel: () => void;
+  label?: string;
 }
 
-const CLEAR_PASSWORD = '0220';
-
-export default function PasswordModal({ title, message, onConfirm, onCancel }: Props) {
+export default function PasswordModal({ title, message, onConfirm, onCancel, label = 'Contraseña' }: Props) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password === CLEAR_PASSWORD) {
-      await onConfirm();
-    } else {
-      setError('Contraseña incorrecta');
+    if (!password.trim()) {
+      setError('Ingrese la contraseña');
+      return;
+    }
+    setError('');
+    setLoading(true);
+    try {
+      await onConfirm(password);
+    } catch (err: any) {
+      setError(err.message || 'Error');
       setPassword('');
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -42,19 +50,19 @@ export default function PasswordModal({ title, message, onConfirm, onCancel }: P
             type="password"
             value={password}
             onChange={e => { setPassword(e.target.value); setError(''); }}
-            placeholder="Contraseña"
+            placeholder={label}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500"
             autoFocus
           />
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex gap-3 justify-end pt-1">
-            <button type="button" onClick={onCancel}
-              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200">
+            <button type="button" onClick={onCancel} disabled={loading}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50">
               Cancelar
             </button>
-            <button type="submit"
-              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700">
-              Confirmar
+            <button type="submit" disabled={loading}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-orange-600 hover:bg-orange-700 disabled:opacity-50">
+              {loading ? 'Validando...' : 'Confirmar'}
             </button>
           </div>
         </form>
