@@ -8,6 +8,7 @@ import { getDashboard, getFourWeekTrend } from '../api';
 import type { DashboardData } from '../types';
 import { formatEfficiency, getToday, getWeekRange, getWeekNumber, formatNumber } from '../utils';
 import { CHART_COLORS, PIE_TWO_COLORS, BAR_GROUPED, LINE_COLORS, KPI_COLORS } from '../utils/chartColors';
+import { ProductionTooltip, DespachoTooltip, EficienciaDespachoTooltip, EficienciaDescargueTooltip, CitasTooltip, CumplimientoCitasTooltip, DescargueTooltip } from './charts/ChartTooltips';
 
 // Types for 4-week trend
 interface FourWeekTrend {
@@ -166,7 +167,7 @@ export default function DashboardProduccion() {
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
               <XAxis dataKey="operator" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => formatNumber(Number(v))} />
+              <Tooltip content={<ProductionTooltip />} />
               <Bar dataKey="total_kg" fill={CHART_COLORS.PRIMARY} radius={[6, 6, 0, 0]} name="Kg" />
             </BarChart>
           </ResponsiveContainer>
@@ -179,10 +180,10 @@ export default function DashboardProduccion() {
           </h3>
           <ResponsiveContainer width="100%" height={250}>
             <BarChart data={data.kgByOperator}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.GRID} />
               <XAxis dataKey="operator" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} unit="%" tickFormatter={v => formatNumber(Number(v))} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={v => [formatNumber(Number(v)), 'Eficiencia']} />
+              <Tooltip content={<ProductionTooltip />} />
               <Bar dataKey="avg_efficiency" fill={CHART_COLORS.SECONDARY} radius={[6, 6, 0, 0]} name="Eficiencia" />
             </BarChart>
           </ResponsiveContainer>
@@ -199,7 +200,7 @@ export default function DashboardProduccion() {
               <XAxis dataKey="date" tick={{ fontSize: 10 }} />
               <YAxis yAxisId="left" tick={{ fontSize: 11 }} tickFormatter={v => formatNumber(Number(v))} />
               <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} unit="%" tickFormatter={v => formatNumber(Number(v))} />
-              <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} formatter={(v: any) => [formatNumber(Number(v)), '']} />
+              <Tooltip content={<ProductionTooltip />} />
               <Line yAxisId="left" type="monotone" dataKey="total_kg" stroke={LINE_COLORS[0]} strokeWidth={2.5} dot={{ r: 3, fill: LINE_COLORS[0] }} name="Kg" />
               <Line yAxisId="left" type="monotone" dataKey="total_orders" stroke={LINE_COLORS[1]} strokeWidth={2} dot={{ r: 3, fill: LINE_COLORS[1] }} name="Pedidos" />
               <Line yAxisId="right" type="monotone" dataKey="avg_efficiency" stroke={LINE_COLORS[2]} strokeWidth={2} strokeDasharray="4 3" dot={{ r: 3, fill: LINE_COLORS[2] }} name="Eficiencia %" />
@@ -214,6 +215,7 @@ export default function DashboardProduccion() {
           </h3>
           <ResponsiveContainer width="100%" height={250}>
             <PieChart>
+              <Tooltip content={<ProductionTooltip />} />
               <Pie
                 data={data.productionByType}
                 cx="50%" cy="50%"
