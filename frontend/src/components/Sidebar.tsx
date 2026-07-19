@@ -168,7 +168,7 @@ export default function Sidebar({
         <div className="flex items-center justify-between h-14 px-3 border-b border-gray-200 shrink-0">
           {!collapsed && (
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm">
                 <Package className="w-5 h-5 text-white" />
               </div>
               <span className="font-bold text-gray-900 truncate text-sm">Control Productividad</span>
@@ -209,13 +209,13 @@ export default function Sidebar({
                         onClick={() => handleItemClick(item)}
                         className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                           active
-                            ? 'bg-emerald-50 text-emerald-700 border-l-2 border-emerald-600 shadow-sm'
+                            ? 'bg-blue-50 text-blue-700 border-l-2 border-blue-600 shadow-sm'
                             : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         } relative group`}
                         style={{ animationDelay: `${itemIndex * 20}ms` }}
                         aria-current={active ? 'page' : undefined}
                       >
-                        <ItemIcon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-emerald-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
+                        <ItemIcon className={`w-5 h-5 flex-shrink-0 ${active ? 'text-blue-600' : 'text-gray-400 group-hover:text-gray-600'}`} />
                         {!collapsed && <span className="flex-1 truncate">{item.label}</span>}
                         {badge !== undefined && badge > 0 && !collapsed && renderBadge(badge, item.badgeColor || 'red')}
                         {collapsed && (
@@ -238,8 +238,8 @@ export default function Sidebar({
             <div className="mb-3">
               <p className="text-xs text-gray-500 mb-2 px-2">Usuario</p>
               <div className="flex items-center gap-2 px-2 py-2 bg-gray-50 rounded-lg">
-                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                  <span className="text-xs font-medium text-emerald-700">{user.charAt(0).toUpperCase()}</span>
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-xs font-medium text-blue-700">{user.charAt(0).toUpperCase()}</span>
                 </div>
                 <span className="text-sm font-medium text-gray-700 truncate">{user}</span>
               </div>
@@ -263,7 +263,7 @@ export default function Sidebar({
       {/* Mobile FAB */}
       <button
         onClick={handleMobileToggle}
-        className="lg:hidden fixed bottom-5 right-5 z-40 p-3 rounded-full bg-emerald-600 text-white shadow-lg hover:bg-emerald-700 transition-all duration-200 hover:scale-105 active:scale-95 animate-bounce-in"
+        className="lg:hidden fixed bottom-5 right-5 z-40 p-3 rounded-full bg-blue-600 text-white shadow-lg hover:bg-blue-700 transition-all duration-200 hover:scale-105 active:scale-95 animate-bounce-in"
         aria-label="Abrir menú"
       >
         <MenuIcon className="w-6 h-6" />
