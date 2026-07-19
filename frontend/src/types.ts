@@ -186,3 +186,17 @@ export interface TypeBasedWeeklyKPIs {
   production: { week: string; type: string; orders: number; kg: number; skus: number; avg_efficiency: number }[];
   despachos: { week: string; type: string; kg: number; vehiculos: number; avg_efficiency: number }[];
 }
+
+export interface Movement {
+  id: number;
+  fecha: string;
+  origen_cliente: string;
+  origen_sku: string;
+  origen_id: number;
+  destino_cliente: string;
+  destino_sku: string;
+  destino_id: number;
+  kg: number;
+  creado_por: string;
+  creado_en: string;
+}

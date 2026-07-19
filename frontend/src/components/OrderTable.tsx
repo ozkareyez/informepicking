@@ -1,17 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { Search, ArrowUpDown, Edit, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, Trash, User, Truck, Download, ChevronDown, ChevronUp } from 'lucide-react';
-import { getOrders, deleteOrder, clearAllData, deleteOrdersByDateRange, getAllDespachos, getUnloadings } from '../api';
-import type { Order, Despacho, Unloading } from '../types';
+import { Search, ArrowUpDown, Edit, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, Trash, User, Truck, Download, ChevronDown, ChevronUp, Package, PackageSearch, CalendarDays, AlertTriangle } from 'lucide-react';
+import { getOrders, deleteOrder, clearAllData, deleteOrdersByDateRange, getAllDespachos, getUnloadings, getCitasCargue, deleteDespacho, deleteUnloading, deleteCitaCargue, getMovements } from '../api';
+import type { Order, Despacho, Unloading, CitaCargue } from '../types';
 import { calculateKgPerHour, calculateEfficiency, getOverdueDays, getWeekNumber, toUpperCase } from '../utils';
 import * as XLSX from 'xlsx';
-
-const EXCEL_COL_WIDTHS = [
-  { wch: 12 }, { wch: 20 }, { wch: 14 }, { wch: 10 },
-  { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 },
-  { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 16 },
-  { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 12 },
-  { wch: 14 },
-];
+import PasswordModal from './PasswordModal';
 
 const EXCEL_HEADER_STYLE = {
   font: { bold: true, color: { rgb: 'FFFFFF' }, size: 11 },
@@ -24,7 +17,6 @@ const EXCEL_HEADER_STYLE = {
     right: { style: 'thin' as const, color: { rgb: 'CCCCCC' } },
   },
 };
-import PasswordModal from './PasswordModal';
 
 interface Props {
   refreshTrigger: number;
@@ -36,6 +28,9 @@ const PAGE_SIZE = 10;
 
 export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [despachos, setDespachos] = useState<Despacho[]>([]);
+  const [unloadings, setUnloadings] = useState<Unloading[]>([]);
+  const [citas, setCitas] = useState<CitaCargue[]>([]);
   const [loading, setLoading] = useState(true);
   const [cliente, setCliente] = useState('');
   const [date, setDate] = useState('');
@@ -45,6 +40,9 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [confirmDeleteDespacho, setConfirmDeleteDespacho] = useState<number | null>(null);
+  const [confirmDeleteUnloading, setConfirmDeleteUnloading] = useState<number | null>(null);
+  const [confirmDeleteCita, setConfirmDeleteCita] = useState<number | null>(null);
   const [passwordAction, setPasswordAction] = useState<{ title: string; message: string; action: () => Promise<void> } | null>(null);
   const [showDateDelete, setShowDateDelete] = useState(false);
   const [deleteStartDate, setDeleteStartDate] = useState('');
@@ -52,9 +50,13 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
   const [deleteWeek, setDeleteWeek] = useState('');
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [despachosMap, setDespachosMap] = useState<Record<number, Despacho[]>>({});
+  const [activeTab, setActiveTab] = useState<'pedidos' | 'despachos' | 'descargues' | 'citas'>('pedidos');
 
   useEffect(() => {
     load();
+    loadDespachos();
+    loadUnloadings();
+    loadCitas();
   }, [refreshTrigger, sortBy, sortOrder, statusFilter]);
 
   async function load() {
@@ -62,8 +64,15 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     try {
       const data = await getOrders({ cliente, date, type, status: statusFilter || undefined, sortBy, sortOrder });
       setOrders(data);
+    } catch {
+      console.error('Error loading orders');
+    } finally {
+      setLoading(false);
+    }
+  }
 
-      // Load despachos for all orders
+  async function loadDespachos() {
+    try {
       const dMap: Record<number, Despacho[]> = {};
       const allDespachos = await getAllDespachos();
       for (const d of allDespachos) {
@@ -71,11 +80,22 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         dMap[d.order_id].push(d);
       }
       setDespachosMap(dMap);
-    } catch {
-      console.error('Error loading orders');
-    } finally {
-      setLoading(false);
-    }
+      setDespachos(allDespachos);
+    } catch {}
+  }
+
+  async function loadUnloadings() {
+    try {
+      const data = await getUnloadings();
+      setUnloadings(data);
+    } catch {}
+  }
+
+  async function loadCitas() {
+    try {
+      const data = await getCitasCargue();
+      setCitas(data);
+    } catch {}
   }
 
   function handleSort(column: string) {
@@ -95,6 +115,37 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       load();
     } catch {
       alert('Error al eliminar');
+    }
+  }
+
+  async function handleDeleteDespacho(id: number) {
+    try {
+      await deleteDespacho(id);
+      setConfirmDeleteDespacho(null);
+      loadDespachos();
+      load();
+    } catch {
+      alert('Error al eliminar despacho');
+    }
+  }
+
+  async function handleDeleteUnloading(id: number) {
+    try {
+      await deleteUnloading(id);
+      setConfirmDeleteUnloading(null);
+      loadUnloadings();
+    } catch {
+      alert('Error al eliminar descargue');
+    }
+  }
+
+  async function handleDeleteCita(id: number) {
+    try {
+      await deleteCitaCargue(id);
+      setConfirmDeleteCita(null);
+      loadCitas();
+    } catch {
+      alert('Error al eliminar cita');
     }
   }
 
@@ -214,7 +265,30 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     applyHeaderStyle(wsReg);
     XLSX.utils.book_append_sheet(wb, wsReg, 'Registros');
 
-    // ─── Sheet 2: Descargues ───
+    // ─── Sheet 2: Despachos ───
+    if (despachos.length > 0) {
+      const despData = despachos.map(d => ({
+        Fecha: d.date,
+        Orden: d.order_id,
+        Ruta: d.ruta?.toUpperCase() || '',
+        Placa: d.placa?.toUpperCase() || '',
+        PLC: d.plc?.toUpperCase() || '',
+        Kg: d.kg,
+        'Hora inicio': d.cargue_start,
+        'Hora fin': d.cargue_end,
+        'Tiempo cargue': d.cargue_time,
+        Novedad: d.novedad ? 'Sí' : 'No',
+        'Cant. ref. novedad': d.cantidad_referencias_novedad,
+        Registrado: d.created_at?.slice(0, 16).replace('T', ' ') || '',
+        Por: d.created_by?.toUpperCase() || '',
+      }));
+      const wsDesp = XLSX.utils.json_to_sheet(despData);
+      wsDesp['!cols'] = [{ wch: 12 }, { wch: 8 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 18 }, { wch: 14 }];
+      applyHeaderStyle(wsDesp);
+      XLSX.utils.book_append_sheet(wb, wsDesp, 'Despachos');
+    }
+
+    // ─── Sheet 3: Descargues ───
     try {
       const allUnloadings = await getUnloadings();
       if (allUnloadings.length > 0) {
@@ -236,7 +310,57 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       }
     } catch {}
 
-    // ─── Sheet 3: Resumen ───
+    // ─── Sheet 4: Citas ───
+    if (citas.length > 0) {
+      const citasData = citas.map(c => ({
+        Ruta: c.ruta?.toUpperCase() || '',
+        Placa: c.placa?.toUpperCase() || '',
+        Kg: c.kg,
+        Tipo: c.tipo,
+        'Hora cita': c.hora_cita,
+        Llegada: c.hora_llegada || '',
+        'Retraso (min)': c.retraso_minutos !== null ? c.retraso_minutos : '',
+        'Cumplió': c.cumplio_cita === true ? 'Sí' : c.cumplio_cita === false ? 'No' : '',
+        PLC: c.plc?.toUpperCase() || '',
+        'Ruta cargada': c.ruta_cargada ? 'Sí' : 'No',
+        Observaciones: c.observaciones || '',
+        Registrado: c.created_at?.slice(0, 16).replace('T', ' ') || '',
+        Por: c.created_by?.toUpperCase() || '',
+      }));
+      const wsCitas = XLSX.utils.json_to_sheet(citasData);
+      wsCitas['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 14 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 20 }, { wch: 18 }, { wch: 14 }];
+      applyHeaderStyle(wsCitas);
+      XLSX.utils.book_append_sheet(wb, wsCitas, 'Citas');
+    }
+
+    // ─── Sheet 5: Reasignaciones / Traspasos ───
+    try {
+      const allMovements = await getMovements();
+      if (allMovements.length > 0) {
+        const movData = allMovements.map(m => ({
+          Fecha: m.fecha || m.created_at?.slice(0, 10) || '',
+          'Origen Cliente': m.origen_cliente,
+          'Origen SKU': m.origen_sku,
+          'Origen ID': m.origen_id,
+          'Destino Cliente': m.destino_cliente,
+          'Destino SKU': m.destino_sku,
+          'Destino ID': m.destino_id,
+          'Kg Reasignados': m.kg,
+          'Creado por': m.creado_por,
+          'Creado en': m.creado_en || m.created_at?.slice(0, 16).replace('T', ' ') || '',
+        }));
+        const wsMov = XLSX.utils.json_to_sheet(movData);
+        wsMov['!cols'] = [
+          { wch: 12 }, { wch: 22 }, { wch: 14 }, { wch: 10 },
+          { wch: 22 }, { wch: 14 }, { wch: 10 },
+          { wch: 16 }, { wch: 16 }, { wch: 20 },
+        ];
+        applyHeaderStyle(wsMov);
+        XLSX.utils.book_append_sheet(wb, wsMov, 'Reasignaciones');
+      }
+    } catch {}
+
+    // ─── Sheet 6: Resumen ───
     const totalOrders = orders.length;
     const totalKg = orders.reduce((s, o) => s + o.kg, 0);
     const completed = orders.filter(o => o.status === 'completed' || o.status === 'despachado');
@@ -342,11 +466,11 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
   const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const SortHeader = ({ column, children }: { column: string; children: React.ReactNode }) => (
-    <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
+    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none"
       onClick={() => handleSort(column)}>
       <div className="flex items-center gap-1">
         {children}
-        <ArrowUpDown className={`w-3 h-3 ${sortBy === column ? 'text-blue-600' : 'text-gray-400'}`} />
+        <ArrowUpDown className="w-3 h-3 text-gray-400" />
       </div>
     </th>
   );
@@ -466,212 +590,436 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       )}
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-        {/* Desktop table */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <SortHeader column="date">Fecha</SortHeader>
-                <SortHeader column="cliente">Cliente</SortHeader>
-                <SortHeader column="sku">SKU</SortHeader>
-                <SortHeader column="kg">Kg</SortHeader>
-                <SortHeader column="operator">Operario</SortHeader>
-                <SortHeader column="start_time">Inicio</SortHeader>
-                <SortHeader column="end_time">Final</SortHeader>
-                <SortHeader column="time_spent">Tiempo</SortHeader>
-                <SortHeader column="kg_per_hour">Kg/h</SortHeader>
-                <SortHeader column="efficiency">Efic.</SortHeader>
-                <SortHeader column="type">Tipo</SortHeader>
-                <SortHeader column="plc">PLC</SortHeader>
-                <SortHeader column="placa">Placa</SortHeader>
-                <SortHeader column="cargue_time">Cargue</SortHeader>
-                <SortHeader column="status">Estado</SortHeader>
-                <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Creado por</th>
-                <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Acción</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={16} className="px-3 py-8 text-center">
-                    <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
-                  </td>
-                </tr>
-              ) : paginated.length === 0 ? (
-                <tr>
-                  <td colSpan={16} className="px-3 py-8 text-center text-gray-500 text-sm">No hay pedidos</td>
-                </tr>
-              ) : (
-                paginated.map(order => {
-                  const despachos = despachosMap[order.id] || [];
-                  const hasDespachos = despachos.length > 0;
-                  const isExpanded = expandedOrderId === order.id;
+        {/* Tab Navigation */}
+        <div className="border-b border-gray-100 bg-gray-50 px-4">
+          <nav className="flex gap-1 py-2 overflow-x-auto" aria-label="Tabs de administración">
+            <button onClick={() => setActiveTab('pedidos')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'pedidos' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+              <Package className="w-3.5 h-3.5 inline-block mr-1" /> Pedidos ({orders.length})
+            </button>
+            <button onClick={() => setActiveTab('despachos')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'despachos' ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+              <Truck className="w-3.5 h-3.5 inline-block mr-1" /> Despachos ({despachos.length})
+            </button>
+            <button onClick={() => setActiveTab('descargues')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'descargues' ? 'bg-amber-100 text-amber-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+              <PackageSearch className="w-3.5 h-3.5 inline-block mr-1" /> Descargues ({unloadings.length})
+            </button>
+            <button onClick={() => setActiveTab('citas')} className={`whitespace-nowrap px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === 'citas' ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-200'}`}>
+              <CalendarDays className="w-3.5 h-3.5 inline-block mr-1" /> Citas ({citas.length})
+            </button>
+          </nav>
+        </div>
 
-// Aggregate dispatch info for main row display
-                  const plcs = despachos.map(d => d.plc?.toUpperCase()).filter(Boolean).join(', ');
-                  const placas = despachos.map(d => d.placa?.toUpperCase()).filter(Boolean).join(', ');
-                  const cargueTimes = despachos.map(d => d.cargue_time).filter(Boolean).join(', ');
-                  const rutas = [...new Set(despachos.map(d => d.ruta?.toUpperCase()).filter(Boolean))].join(', ');
-                  const totalDespachadoKg = despachos.reduce((s, d) => s + d.kg, 0);
-                  const vehiculosCount = despachos.length;
+        {/* Pedidos Table */}
+        {activeTab === 'pedidos' && (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <SortHeader column="date">Fecha</SortHeader>
+                    <SortHeader column="cliente">Cliente</SortHeader>
+                    <SortHeader column="sku">SKU</SortHeader>
+                    <SortHeader column="kg">Kg</SortHeader>
+                    <SortHeader column="operator">Operario</SortHeader>
+                    <SortHeader column="start_time">Inicio</SortHeader>
+                    <SortHeader column="end_time">Final</SortHeader>
+                    <SortHeader column="time_spent">Tiempo</SortHeader>
+                    <SortHeader column="kg_per_hour">Kg/h</SortHeader>
+                    <SortHeader column="efficiency">Efic.</SortHeader>
+                    <SortHeader column="type">Tipo</SortHeader>
+                    <SortHeader column="plc">PLC</SortHeader>
+                    <SortHeader column="placa">Placa</SortHeader>
+                    <SortHeader column="cargue_time">Cargue</SortHeader>
+                    <SortHeader column="status">Estado</SortHeader>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Creado por</th>
+                    <th className="px-2 py-2 text-left text-[10px] font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {loading ? (
+                    <tr>
+                      <td colSpan={16} className="px-3 py-8 text-center">
+                        <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+                      </td>
+                    </tr>
+                  ) : paginated.length === 0 ? (
+                    <tr>
+                      <td colSpan={16} className="px-3 py-8 text-center text-gray-500 text-sm">No hay pedidos</td>
+                    </tr>
+                  ) : (
+                    paginated.map(order => {
+                      const despachos = despachosMap[order.id] || [];
+                      const hasDespachos = despachos.length > 0;
+                      const isExpanded = expandedOrderId === order.id;
 
-                  return (
-                    <>
-                      <tr key={order.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => hasDespachos && setExpandedOrderId(isExpanded ? null : order.id)}>
-                        <td className="px-2 py-1.5 text-xs text-gray-900 whitespace-nowrap">{order.date}</td>
-                        <td className="px-2 py-1.5 text-xs font-medium text-gray-900 truncate max-w-[100px]">{order.cliente.toUpperCase()}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.sku.toUpperCase()}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.kg}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700">{order.operator.toUpperCase()}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{order.start_time}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{val(order.end_time)}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{val(order.time_spent)}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.kg_per_hour)}</td>
-                        <td className="px-2 py-1.5 text-xs">
-                          {order.efficiency != null ? (
-                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                              order.efficiency >= 100 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                            }`}>
-                              {order.efficiency.toFixed(1)}%
-                            </span>
-                          ) : '-'}
-                        </td>
-                        <td className="px-2 py-1.5 text-xs">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                            order.type === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                          }`}>
-                            {order.type === 'Masivo' ? 'M' : 'VD'}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700" title={plcs || undefined}>{plcs || val(order.plc?.toUpperCase())}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700" title={placas || undefined}>{placas || val(order.placa?.toUpperCase())}</td>
-                        <td className="px-2 py-1.5 text-xs text-gray-700" title={cargueTimes || undefined}>{cargueTimes || val(order.cargue_time)}</td>
-                        <td className="px-2 py-1.5 text-xs">
-                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                            order.status === 'despachado' ? 'bg-green-100 text-green-800' : order.status === 'completed' ? 'bg-blue-100 text-blue-800' : order.status === 'pending' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {order.status === 'despachado' ? `Desp (${vehiculosCount})` : order.status === 'completed' ? 'Comp' : order.status === 'pending' ? 'Prog' : 'Sin Op'}
-                          </span>
-                        </td>
-                        <td className="px-2 py-1.5 text-xs text-gray-500">{order.created_by || '-'}</td>
-                        <td className="px-2 py-1.5 text-xs">
-                          <div className="flex items-center gap-1">
-                            <button onClick={(e) => { e.stopPropagation(); onEdit(order); }}
-                              className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors">
-                              <Edit className="w-3 h-3" />
-                            </button>
-                            {hasDespachos && (
-                              <button onClick={(e) => { e.stopPropagation(); setExpandedOrderId(isExpanded ? null : order.id); }}
-                                className="p-1 rounded text-green-600 hover:bg-green-50 transition-colors" title={isExpanded ? 'Ocultar despachos' : 'Ver despachos'}>
-                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                              </button>
-                            )}
-                            {confirmDelete === order.id ? (
-                              <div className="flex items-center gap-0.5">
-                                <button onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }}
-                                  className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded hover:bg-red-700">Sí</button>
-                                <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }}
-                                  className="px-1.5 py-0.5 text-[10px] bg-gray-200 text-gray-700 rounded hover:bg-gray-300">No</button>
+                      const plcs = despachos.map(d => d.plc?.toUpperCase()).filter(Boolean).join(', ');
+                      const placas = despachos.map(d => d.placa?.toUpperCase()).filter(Boolean).join(', ');
+                      const cargueTimes = despachos.map(d => d.cargue_time).filter(Boolean).join(', ');
+                      const vehiculosCount = despachos.length;
+
+                      return (
+                        <>
+                          <tr key={order.id} className="hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => hasDespachos && setExpandedOrderId(isExpanded ? null : order.id)}>
+                            <td className="px-2 py-1.5 text-xs text-gray-900 whitespace-nowrap">{order.date}</td>
+                            <td className="px-2 py-1.5 text-xs font-medium text-gray-900 truncate max-w-[100px]">{order.cliente.toUpperCase()}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700">{order.sku.toUpperCase()}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700">{order.kg}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700">{order.operator.toUpperCase()}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{order.start_time}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{val(order.end_time)}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700 whitespace-nowrap">{val(order.time_spent)}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700">{val(order.kg_per_hour)}</td>
+                            <td className="px-2 py-1.5 text-xs">
+                              {order.efficiency != null ? (
+                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                                  order.efficiency >= 100 ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                                }`}>
+                                  {order.efficiency.toFixed(1)}%
+                                </span>
+                              ) : '-'}
+                            </td>
+                            <td className="px-2 py-1.5 text-xs">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                                order.type === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                              }`}>
+                                {order.type === 'Masivo' ? 'M' : 'VD'}
+                              </span>
+                            </td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700" title={plcs || undefined}>{plcs || val(order.plc?.toUpperCase())}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700" title={placas || undefined}>{placas || val(order.placa?.toUpperCase())}</td>
+                            <td className="px-2 py-1.5 text-xs text-gray-700" title={cargueTimes || undefined}>{cargueTimes || val(order.cargue_time)}</td>
+                            <td className="px-2 py-1.5 text-xs">
+                              <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                                order.status === 'despachado' ? 'bg-green-100 text-green-800' : order.status === 'completed' ? 'bg-blue-100 text-blue-800' : order.status === 'pending' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
+                              }`}>
+                                {order.status === 'despachado' ? `Desp (${vehiculosCount})` : order.status === 'completed' ? 'Comp' : order.status === 'pending' ? 'Prog' : 'Sin Op'}
+                              </span>
+                            </td>
+                            <td className="px-2 py-1.5 text-xs text-gray-500">{order.created_by || '-'}</td>
+                            <td className="px-2 py-1.5 text-xs">
+                              <div className="flex items-center gap-1">
+                                <button onClick={(e) => { e.stopPropagation(); onEdit(order); }}
+                                  className="p-1 rounded text-blue-600 hover:bg-blue-50 transition-colors">
+                                  <Edit className="w-3 h-3" />
+                                </button>
+                                {hasDespachos && (
+                                  <button onClick={(e) => { e.stopPropagation(); setExpandedOrderId(isExpanded ? null : order.id); }}
+                                    className="p-1 rounded text-green-600 hover:bg-green-50 transition-colors" title={isExpanded ? 'Ocultar despachos' : 'Ver despachos'}>
+                                    {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                                  </button>
+                                )}
+                                {confirmDelete === order.id ? (
+                                  <div className="flex items-center gap-0.5">
+                                    <button onClick={(e) => { e.stopPropagation(); handleDelete(order.id); }}
+                                      className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded hover:bg-red-700">Sí</button>
+                                    <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(null); }}
+                                      className="px-1.5 py-0.5 text-[10px] bg-gray-200 text-gray-700 rounded hover:bg-gray-300">No</button>
+                                  </div>
+                                ) : (
+                                  <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(order.id); }}
+                                    className="p-1 rounded text-red-600 hover:bg-red-50 transition-colors">
+                                    <Trash2 className="w-3 h-3" />
+                                  </button>
+                                )}
                               </div>
-                            ) : (
-                              <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(order.id); }}
-                                className="p-1 rounded text-red-600 hover:bg-red-50 transition-colors">
-                                <Trash2 className="w-3 h-3" />
-                              </button>
-                            )}
+                            </td>
+                          </tr>
+                          {isExpanded && hasDespachos && (
+                            <tr>
+                              <td colSpan={16} className="px-0 py-0">
+                                <div className="bg-green-50 border-t border-green-200 p-4 space-y-3">
+                                  <p className="text-xs font-medium text-green-800">Despachos ({despachos.length} vehículo{despachos.length !== 1 ? 's' : ''}) — Total: {despachos.reduce((s, d) => s + d.kg, 0)} kg</p>
+                                  {despachos.map(d => (
+                                    <div key={d.id} className="bg-white border border-green-200 rounded-lg p-3 space-y-1">
+                                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                        <span className="font-medium text-green-900">Placa: <span className="font-mono">{toUpperCase(d.placa)}</span></span>
+                                        <span className="text-green-700">PLC: <span className="font-mono">{toUpperCase(d.plc)}</span></span>
+                                        <span className="text-green-700"><strong>{d.kg} kg</strong></span>
+                                        <span className="text-green-700">Cargue: {d.cargue_time}</span>
+                                        <span className="text-green-700">Inicio: {d.cargue_start}</span>
+                                        <span className="text-green-700">Fin: {d.cargue_end}</span>
+                                        {d.ruta && <span className="text-blue-600">Ruta: {toUpperCase(d.ruta)}</span>}
+                                        {d.date && <span className="text-green-700">Fecha: {d.date}</span>}
+                                        {d.created_at && <span className="text-green-700">Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
+                                        {d.created_by && <span className="text-gray-500">Por: {toUpperCase(d.created_by)}</span>}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="block md:hidden divide-y divide-gray-100">
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+                </div>
+              ) : paginated.length === 0 ? (
+                <div className="py-8 text-center text-gray-500 text-sm">No hay pedidos</div>
+              ) : (
+                paginated.map(order => (
+                  <div key={order.id} className="px-3 py-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-semibold text-gray-900 truncate">{toUpperCase(order.cliente)}</span>
+                        <span className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                          order.type === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
+                        }`}>{order.type === 'Masivo' ? 'M' : 'VD'}</span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => onEdit(order)} className="p-1 rounded text-blue-600 hover:bg-blue-50">
+                          <Edit className="w-3 h-3" />
+                        </button>
+                        {confirmDelete === order.id ? (
+                          <div className="flex items-center gap-0.5">
+                            <button onClick={() => handleDelete(order.id)} className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded">Sí</button>
+                            <button onClick={() => setConfirmDelete(null)} className="px-1.5 py-0.5 text-[10px] bg-gray-200 rounded">No</button>
                           </div>
+                        ) : (
+                          <button onClick={() => setConfirmDelete(order.id)} className="p-1 rounded text-red-600 hover:bg-red-50">
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-600 mt-0.5">
+                      <span>{order.date}</span>
+                      <span>{order.kg} kg</span>
+                      <span>{toUpperCase(order.operator)}</span>
+                      <span>{order.start_time}-{val(order.end_time)}</span>
+                      <span>{val(order.time_spent)}</span>
+                      {order.efficiency != null && <span className={order.efficiency >= 100 ? 'text-green-600' : 'text-orange-500'}>{order.efficiency.toFixed(1)}%</span>}
+                      {order.plc && <span>PLC:{toUpperCase(order.plc)}</span>}
+                      {order.placa && <span>Placa:{toUpperCase(order.placa)}</span>}
+                      {order.cargue_time && <span>Cargue:{order.cargue_time}</span>}
+                      {order.created_by && <span className="text-gray-400">Por: {toUpperCase(order.created_by)}</span>}
+                      <span className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium ${
+                        order.status === 'despachado' ? 'bg-green-100 text-green-800' : order.status === 'completed' ? 'bg-blue-100 text-blue-800' : order.status === 'pending' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {order.status === 'despachado' ? 'Desp' : order.status === 'completed' ? 'Comp' : order.status === 'pending' ? 'Prog' : 'Sin Op'}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
+
+        {/* Despachos Table */}
+        {activeTab === 'despachos' && (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Orden</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ruta</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placa</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PLC</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kg</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora inicio</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora fin</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tiempo</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Novedad</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cant. ref.</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registrado</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Por</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {despachos.length === 0 ? (
+                    <tr><td colSpan={14} className="px-3 py-8 text-center text-gray-500 text-sm">No hay despachos</td></tr>
+                  ) : (
+                    despachos.map(d => (
+                      <tr key={d.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 text-xs text-gray-900">{d.date}</td>
+                        <td className="px-3 py-2 text-xs font-medium text-gray-900">#{d.order_id}</td>
+                        <td className="px-3 py-2 text-xs font-medium text-gray-900">{toUpperCase(d.ruta) || '—'}</td>
+                        <td className="px-3 py-2 text-xs font-mono text-gray-700">{toUpperCase(d.placa)}</td>
+                        <td className="px-3 py-2 text-xs font-mono text-gray-700">{toUpperCase(d.plc)}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{d.kg}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{d.cargue_start}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{d.cargue_end}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{d.cargue_time}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${d.novedad ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                            {d.novedad ? 'Sí' : 'No'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{d.cantidad_referencias_novedad}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{d.created_at?.slice(0, 16).replace('T', ' ') || '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{toUpperCase(d.created_by) || '—'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          {confirmDeleteDespacho === d.id ? (
+                            <div className="flex items-center gap-0.5">
+                              <button onClick={() => handleDeleteDespacho(d.id)} className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded">Sí</button>
+                              <button onClick={() => setConfirmDeleteDespacho(null)} className="px-1.5 py-0.5 text-[10px] bg-gray-200 rounded">No</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmDeleteDespacho(d.id)} className="p-1 rounded text-red-600 hover:bg-red-50" title="Eliminar despacho">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
                         </td>
                       </tr>
-                      {isExpanded && hasDespachos && (
-                        <tr>
-                          <td colSpan={16} className="px-0 py-0">
-                            <div className="bg-green-50 border-t border-green-200 p-4 space-y-3">
-                              <p className="text-xs font-medium text-green-800">Despachos ({despachos.length} vehículo{despachos.length !== 1 ? 's' : ''}) — Total: {despachos.reduce((s, d) => s + d.kg, 0)} kg</p>
-                              {despachos.map(d => (
-                                <div key={d.id} className="bg-white border border-green-200 rounded-lg p-3 space-y-1">
-                                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-                                    <span className="font-medium text-green-900">Placa: <span className="font-mono">{toUpperCase(d.placa)}</span></span>
-                                    <span className="text-green-700">PLC: <span className="font-mono">{toUpperCase(d.plc)}</span></span>
-                                    <span className="text-green-700"><strong>{d.kg} kg</strong></span>
-                                    <span className="text-green-700">Cargue: {d.cargue_time}</span>
-                                    <span className="text-green-700">Inicio: {d.cargue_start}</span>
-                                    <span className="text-green-700">Fin: {d.cargue_end}</span>
-                                    {d.ruta && <span className="text-blue-600">Ruta: {toUpperCase(d.ruta)}</span>}
-                                    {d.date && <span className="text-green-700">Fecha: {d.date}</span>}
-                                    {d.created_at && <span className="text-green-700">Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
-                                    {d.created_by && <span className="text-gray-500">Por: {toUpperCase(d.created_by)}</span>}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Mobile cards */}
-        <div className="block md:hidden divide-y divide-gray-100">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600" />
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
-          ) : paginated.length === 0 ? (
-            <div className="py-8 text-center text-gray-500 text-sm">No hay pedidos</div>
-          ) : (
-            paginated.map(order => (
-              <div key={order.id} className="px-3 py-2">
-                <div className="flex items-center justify-between">
-<div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-semibold text-gray-900 truncate">{toUpperCase(order.cliente)}</span>
-                    <span className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                      order.type === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'
-                    }`}>{order.type === 'Masivo' ? 'M' : 'VD'}</span>
-                  </div>
-                  <div className="flex items-center gap-1 shrink-0">
-                    <button onClick={() => onEdit(order)} className="p-1 rounded text-blue-600 hover:bg-blue-50">
-                      <Edit className="w-3 h-3" />
-                    </button>
-                    {confirmDelete === order.id ? (
-                      <div className="flex items-center gap-0.5">
-                        <button onClick={() => handleDelete(order.id)} className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded">Sí</button>
-                        <button onClick={() => setConfirmDelete(null)} className="px-1.5 py-0.5 text-[10px] bg-gray-200 rounded">No</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => setConfirmDelete(order.id)} className="p-1 rounded text-red-600 hover:bg-red-50">
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-gray-600 mt-0.5">
-                  <span>{order.date}</span>
-                  <span>{order.kg} kg</span>
-                  <span>{toUpperCase(order.operator)}</span>
-                  <span>{order.start_time}-{val(order.end_time)}</span>
-                  <span>{val(order.time_spent)}</span>
-                  {order.efficiency != null && <span className={order.efficiency >= 100 ? 'text-green-600' : 'text-orange-500'}>{order.efficiency.toFixed(1)}%</span>}
-                  {order.plc && <span>PLC:{toUpperCase(order.plc)}</span>}
-                  {order.placa && <span>Placa:{toUpperCase(order.placa)}</span>}
-                  {order.cargue_time && <span>Cargue:{order.cargue_time}</span>}
-                  {order.created_by && <span className="text-gray-400">Por: {toUpperCase(order.created_by)}</span>}
-                  <span className={`inline-flex items-center px-1 py-0.5 rounded text-[10px] font-medium ${
-                    order.status === 'despachado' ? 'bg-green-100 text-green-800' : order.status === 'completed' ? 'bg-blue-100 text-blue-800' : order.status === 'pending' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {order.status === 'despachado' ? 'Desp' : order.status === 'completed' ? 'Comp' : order.status === 'pending' ? 'Prog' : 'Sin Op'}
-                  </span>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+          </>
+        )}
 
-        {totalPages > 1 && (
+        {/* Descargues Table */}
+        {activeTab === 'descargues' && (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PTM</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kg</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Operarios</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora inicio</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora final</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tiempo</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Novedad</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Resuelta</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registrado</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Por</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {unloadings.length === 0 ? (
+                    <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-500 text-sm">No hay descargues</td></tr>
+                  ) : (
+                    unloadings.map(u => (
+                      <tr key={u.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 text-xs text-gray-900">{u.date}</td>
+                        <td className="px-3 py-2 text-xs font-medium text-gray-900">{u.ptm}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{u.kg}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{u.operators.map(toUpperCase).join(', ')}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{u.start_time}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{u.end_time}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{u.time_spent || '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700 max-w-[150px] truncate">{u.novedad || '—'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${u.novedad_resuelta ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                            {u.novedad_resuelta ? 'Sí' : 'No'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{u.created_at?.slice(0, 16).replace('T', ' ') || '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{toUpperCase(u.created_by) || '—'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          {confirmDeleteUnloading === u.id ? (
+                            <div className="flex items-center gap-0.5">
+                              <button onClick={() => handleDeleteUnloading(u.id)} className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded">Sí</button>
+                              <button onClick={() => setConfirmDeleteUnloading(null)} className="px-1.5 py-0.5 text-[10px] bg-gray-200 rounded">No</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmDeleteUnloading(u.id)} className="p-1 rounded text-red-600 hover:bg-red-50" title="Eliminar descargue">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {/* Citas Table */}
+        {activeTab === 'citas' && (
+          <>
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ruta</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Placa</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kg</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora Cita</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Llegada</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Retraso</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cumplió</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">PLC</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cargada</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Obs.</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registrado</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Por</th>
+                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acción</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {citas.length === 0 ? (
+                    <tr><td colSpan={14} className="px-3 py-8 text-center text-gray-500 text-sm">No hay citas</td></tr>
+                  ) : (
+                    citas.map(c => (
+                      <tr key={c.id} className="hover:bg-gray-50">
+                        <td className="px-3 py-2 text-xs font-medium text-gray-900">{toUpperCase(c.ruta)}</td>
+                        <td className="px-3 py-2 text-xs font-mono text-gray-700">{toUpperCase(c.placa)}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{c.kg}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${c.tipo === 'Masivo' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
+                            {c.tipo === 'Masivo' ? 'M' : 'VD'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{c.hora_cita}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{c.hora_llegada || '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-700">{c.retraso_minutos !== null ? `${c.retraso_minutos} min` : '—'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${c.cumplio_cita === true ? 'bg-green-100 text-green-800' : c.cumplio_cita === false ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-800'}`}>
+                            {c.cumplio_cita === true ? 'Sí' : c.cumplio_cita === false ? 'No' : '—'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs font-mono text-gray-700">{toUpperCase(c.plc) || '—'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${c.ruta_cargada ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                            {c.ruta_cargada ? 'Sí' : 'No'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-xs text-gray-700 max-w-[120px] truncate">{c.observaciones || '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{c.created_at?.slice(0, 16).replace('T', ' ') || '—'}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500">{toUpperCase(c.created_by) || '—'}</td>
+                        <td className="px-3 py-2 text-xs">
+                          {confirmDeleteCita === c.id ? (
+                            <div className="flex items-center gap-0.5">
+                              <button onClick={() => handleDeleteCita(c.id)} className="px-1.5 py-0.5 text-[10px] bg-red-600 text-white rounded">Sí</button>
+                              <button onClick={() => setConfirmDeleteCita(null)} className="px-1.5 py-0.5 text-[10px] bg-gray-200 rounded">No</button>
+                            </div>
+                          ) : (
+                            <button onClick={() => setConfirmDeleteCita(c.id)} className="p-1 rounded text-red-600 hover:bg-red-50" title="Eliminar cita">
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+
+        {totalPages > 1 && activeTab === 'pedidos' && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
             <p className="text-sm text-gray-600">
               {filtered.length} registros — Página {page + 1} de {totalPages}
@@ -683,9 +1031,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
               </button>
               {Array.from({ length: totalPages }, (_, i) => (
                 <button key={i} onClick={() => setPage(i)}
-                  className={`px-3 py-1.5 text-sm rounded-lg ${
-                    page === i ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-200'
-                  }`}>
+                  className={`px-3 py-1.5 text-sm rounded-lg ${page === i ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-200'}`}>
                   {i + 1}
                 </button>
               ))}
@@ -709,4 +1055,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
 
     </div>
   );
+}
+
+function val(v: any) {
+  return v ?? '-';
 }

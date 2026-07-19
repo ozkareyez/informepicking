@@ -69,6 +69,7 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
     if (!plc.trim()) { setError('El número de PLC es obligatorio'); return; }
     if (!/^\d+$/.test(plc.trim())) { setError('El PLC solo debe contener números'); return; }
     if (!kg || kgNum <= 0) { setError('Los kg deben ser mayor a 0'); return; }
+    if (!/^\d+(\.\d{1,3})?$/.test(kg)) { setError('Máximo 3 decimales'); return; }
     if (kgNum > saldo) { setError(`Los kg no pueden exceder el saldo disponible (${saldo} kg)`); return; }
     if (!cargueStart) { setError('La hora de inicio de cargue es obligatoria'); return; }
     if (!cargueEnd) { setError('La hora de fin de cargue es obligatoria'); return; }
@@ -194,8 +195,8 @@ export default function DispatchModal({ order, despachos, onSave, onClose, cita 
             <label className="block text-xs sm:text-[10px] font-medium text-gray-500 mb-1 sm:mb-0.5">
               Kg a cargar <span className="text-gray-400">(máx: {saldo} kg)</span>
             </label>
-            <input type="number" value={kg} onChange={e => setKg(e.target.value)}
-              placeholder={`0 - ${saldo}`} min="1" max={saldo}
+            <input type="number" value={kg} onChange={e => setKg(e.target.value)} onBlur={e => { if (e.target.value && !/^\d+(\.\d{1,3})?$/.test(e.target.value)) setKg(''); }}
+              placeholder={`0 - ${saldo}`} min="1" max={saldo} step="0.001"
               className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
           </div>
 

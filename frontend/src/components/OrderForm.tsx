@@ -192,7 +192,7 @@ export default function OrderForm({ onSubmit }: Props) {
 
           <div>
             <label className="block text-sm sm:text-xs font-medium text-gray-700 sm:text-gray-500 mb-1 sm:mb-0.5">Kg</label>
-            <input type="number" step="0.01" min="0.01" {...register('kg', { required: 'Obligatorio', min: { value: 0.01, message: 'Debe ser > 0' } })}
+            <input type="number" step="0.001" min="0.01" {...register('kg', { required: 'Obligatorio', min: { value: 0.01, message: 'Debe ser > 0' }, pattern: { value: /^\d+(\.\d{1,3})?$/, message: 'Máximo 3 decimales' } })}
               className="w-full rounded-lg sm:rounded-md border border-gray-300 px-4 sm:px-2.5 py-3 sm:py-1.5 text-base sm:text-sm focus:ring-2 focus:ring-blue-500" />
             {errors.kg && <p className="text-red-500 text-xs sm:text-[10px] mt-1 sm:mt-0.5">{errors.kg.message}</p>}
           </div>

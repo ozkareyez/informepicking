@@ -1,7 +1,29 @@
 import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, User, CitaCargue, CitaCargueFormData, Rack, RackFormData, RackUpdateData } from './types';
 import * as supabaseStore from './supabaseStore';
+import * as localStore from './store';
 
 const active = supabaseStore;
+
+export async function createMovementLog(data: {
+  origen_cliente: string;
+  origen_sku: string;
+  origen_id: number;
+  destino_cliente: string;
+  destino_sku: string;
+  destino_id: number;
+  kg: number;
+  creado_por: string;
+}): Promise<void> {
+  return localStore.createMovementLog(data);
+}
+
+export async function getMovements(): Promise<any[]> {
+  return localStore.getMovements();
+}
+
+export async function clearMovements(): Promise<void> {
+  return localStore.clearMovements();
+}
 
 export async function getOrders(params: {
   cliente?: string;
@@ -54,6 +76,10 @@ export async function updateOrder(id: number, data: OrderFormData & { end_time: 
   return active.updateOrder(id, data);
 }
 
+export async function updateOrderKg(id: number, newKg: number): Promise<void> {
+  return active.updateOrderKg(id, newKg);
+}
+
 export async function deleteOrder(id: number): Promise<void> {
   return active.deleteOrder(id);
 }
@@ -85,14 +111,16 @@ export async function login(username: string, password: string): Promise<User | 
   return active.login(username, password);
 }
 
-// ─── Despachos ──────────────────────────────────────────────────
-
 export async function getDespachos(orderId: number): Promise<Despacho[]> {
   return active.getDespachos(orderId);
 }
 
 export async function getAllDespachos(): Promise<Despacho[]> {
   return active.getAllDespachos();
+}
+
+export async function deleteDespacho(id: number): Promise<void> {
+  return active.deleteDespacho(id);
 }
 
 export async function createDespacho(orderId: number, data: {
@@ -210,4 +238,3 @@ export async function updateDespachoKg(despachoId: number, newKg: number, passwo
 export async function finishOrderWithDevolucion(orderId: number, devolucionKg: number, password: string): Promise<Order> {
   return active.finishOrderWithDevolucion(orderId, devolucionKg, password);
 }
-

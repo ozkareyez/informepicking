@@ -184,7 +184,14 @@ export async function updateOrder(id: number, data: OrderFormData & { end_time: 
 }
 
 export async function deleteOrder(id: number): Promise<void> {
+  const { error: despError } = await getSupabase().from('despachos').delete().eq('order_id', id);
+  if (despError) throw new Error(`Error al eliminar despachos: ${despError.message}`);
   const { error } = await getSupabase().from('orders').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function updateOrderKg(id: number, newKg: number): Promise<void> {
+  const { error } = await getSupabase().from('orders').update({ kg: newKg }).eq('id', id);
   if (error) throw new Error(error.message);
 }
 
@@ -236,13 +243,11 @@ function applyDateFilter(query: any, period: string | undefined, date: string | 
 }
 
 export async function getDashboard(params: { period?: string; date?: string } = {}): Promise<DashboardData> {
-  console.log('🔍 getDashboard called with params:', params);
   let orderQuery = getSupabase().from('orders').select('*').in('status', ['completed', 'despachado']);
   orderQuery = applyDateFilter(orderQuery, params.period, params.date);
   const { data: orderData, error: orderError } = await orderQuery;
   if (orderError) throw new Error(orderError.message);
   const completed = (orderData || []).map(mapOrder);
-  console.log('📦 Orders fetched:', completed.length, completed);
 
   let despQuery = getSupabase().from('despachos').select('*');
   if (params.period && params.date) {
@@ -251,13 +256,11 @@ export async function getDashboard(params: { period?: string; date?: string } = 
   }
   const { data: despData } = await despQuery;
   const despachos = (despData || []).map(mapDespacho);
-  console.log('🚚 Despachos fetched:', despachos.length, despachos);
 
   let uncQuery = getSupabase().from('unloadings').select('*');
   uncQuery = applyDateFilter(uncQuery, params.period, params.date);
   const { data: uncData } = await uncQuery;
   const unloadings = (uncData || []).map(mapUnloading);
-  console.log('📦 Unloadings fetched:', unloadings.length, unloadings);
 
   const totalOrders = completed.length;
   const totalKg = completed.reduce((s, o) => s + o.kg, 0);
@@ -794,6 +797,11 @@ export async function getAllDespachos(): Promise<Despacho[]> {
   const { data, error } = await getSupabase().from('despachos').select('*').order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return (data || []).map(mapDespacho);
+}
+
+export async function deleteDespacho(id: number): Promise<void> {
+  const { error } = await getSupabase().from('despachos').delete().eq('id', id);
+  if (error) throw new Error(error.message);
 }
 
 // ─── Descargue de contenedores ────────────────────────────────

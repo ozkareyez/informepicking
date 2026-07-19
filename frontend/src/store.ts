@@ -5,6 +5,7 @@ const STORAGE_KEY = 'pedidos_orders';
 const DESPACHOS_KEY = 'pedidos_despachos';
 const UNLOADINGS_KEY = 'pedidos_unloadings';
 const CITAS_KEY = 'pedidos_citas';
+const MOVEMENTS_KEY = 'pedidos_movements';
 
 function loadOrders(): Order[] {
   try {
@@ -48,7 +49,72 @@ function ensureUnloadingIds(unloadings: Unloading[]) {
   if (max >= nextUnloadingId) nextUnloadingId = max + 1;
 }
 
-// ─── Despachos ────────────────────────────────────────────────
+// ─── Movimientos (traspasos) ────────────────────────────────
+
+let nextMovementId = 1;
+
+function loadMovements(): any[] {
+  try { return JSON.parse(localStorage.getItem(MOVEMENTS_KEY) || '[]'); } catch { return []; }
+}
+function saveMovements(movements: any[]) { localStorage.setItem(MOVEMENTS_KEY, JSON.stringify(movements)); }
+
+function ensureMovementIds(movements: any[]) {
+  const max = movements.reduce((m, mv) => Math.max(m, mv.id), 0);
+  if (max >= nextMovementId) nextMovementId = max + 1;
+}
+
+export async function getMovements(): Promise<any[]> {
+  return loadMovements();
+}
+
+export async function createMovement(data: {
+  origen_order_id: number;
+  origen_cliente: string;
+  origen_sku: string;
+  destino_order_id: number;
+  destino_cliente: string;
+  destino_sku: string;
+  kg: number;
+  created_by: string;
+}): Promise<any> {
+  const movements = loadMovements();
+  ensureMovementIds(movements);
+  const mv = { id: nextMovementId++, created_at: new Date().toISOString(), ...data };
+  movements.push(mv);
+  saveMovements(movements);
+return mv;
+}
+
+export async function deleteMovement(id: number): Promise<void> {
+  const movements = loadMovements().filter(m => m.id !== id);
+  saveMovements(movements);
+}
+
+export async function createMovementLog(data: {
+  origen_cliente: string;
+  origen_sku: string;
+  origen_id: number;
+  destino_cliente: string;
+  destino_sku: string;
+  destino_id: number;
+  kg: number;
+  creado_por: string;
+}): Promise<void> {
+  const movements = loadMovements();
+  ensureMovementIds(movements);
+  const movement = {
+    id: nextMovementId++,
+    fecha: new Date().toISOString().split('T')[0],
+    ...data,
+    creado_en: new Date().toISOString().replace('T', ' ').slice(0, 19),
+  };
+  movements.push(movement);
+  saveMovements(movements);
+}
+
+export async function clearMovements(): Promise<void> {
+  localStorage.removeItem(MOVEMENTS_KEY);
+}
 
 export async function getDespachos(orderId: number): Promise<Despacho[]> {
   return loadDespachos().filter(d => d.order_id === orderId).sort((a, b) => a.id - b.id);
@@ -664,4 +730,26 @@ export async function clearAllData(): Promise<void> {
   localStorage.removeItem(UNLOADINGS_KEY);
   localStorage.removeItem(CITAS_KEY);
   localStorage.removeItem(OPERATORS_KEY);
+  localStorage.removeItem(MOVEMENTS_KEY);
+}
+
+import { create } from 'zustand';
+
+type Toast = { id: number; message: string; type: 'success' | 'error' | 'info' };
+
+interface ToastState {
+  toasts: Toast[];
+  add: (message: string, type: 'success' | 'error' | 'info') => void;
+  remove: (id: number) => void;
+}
+
+export const useToastStore = create<ToastState>((set) => ({
+  toasts: [],
+  add: (message, type) => set((s) => ({ toasts: [...s.toasts, { id: Date.now(), message, type }] })),
+  remove: (id) => set((s) => ({ toasts: s.toasts.filter(t => t.id !== id) })),
+}));
+
+export function useToast() {
+  const { add } = useToastStore();
+  return { toast: (message: string, type: 'success' | 'error' | 'info') => add(message, type) };
 }

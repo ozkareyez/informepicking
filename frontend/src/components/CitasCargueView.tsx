@@ -174,6 +174,7 @@ export default function CitasCargueView({ onDispatchFromCita }: Props) {
       setError('Placa, Kg y hora de cita son obligatorios');
       return;
     }
+    if (!/^\d+(\.\d{1,3})?$/.test(kg)) { setError('Máximo 3 decimales en Kg'); return; }
 
     const data: CitaCargueFormData = {
       ruta: ruta.trim(),
@@ -431,7 +432,7 @@ export default function CitasCargueView({ onDispatchFromCita }: Props) {
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Kg</label>
-                <input type="number" step="0.01" min="0.01" value={kg} onChange={e => setKg(e.target.value)}
+                <input type="number" step="0.001" min="0.01" value={kg} onChange={e => setKg(e.target.value)} onBlur={e => { if (e.target.value && !/^\d+(\.\d{1,3})?$/.test(e.target.value)) setKg(''); }}
                   placeholder="Ej: 25000"
                   className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
               </div>

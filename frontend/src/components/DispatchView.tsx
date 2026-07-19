@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Truck, Package, Search, CheckCircle, AlertTriangle, Calendar, Edit, RotateCcw } from 'lucide-react';
-import { getOrdersForDispatch, getDespachos, createDespacho, updateDespachoKg, finishOrderWithDevolucion } from '../api';
+import { Truck, Package, Search, CheckCircle, AlertTriangle, Calendar, Edit, RotateCcw, UserCog } from 'lucide-react';
+import { getOrdersForDispatch, getDespachos, createDespacho, updateDespachoKg, finishOrderWithDevolucion, updateOrder, updateOrderKg, deleteOrder, createMovementLog } from '../api';
+import { useToast } from '../store';
 import type { Order, Despacho } from '../types';
-import { getOverdueDays, getToday, getWeekRange, getWeekNumber, toUpperCase } from '../utils';
+import { getOverdueDays, getToday, getWeekRange, getWeekNumber, toUpperCase, round3 } from '../utils';
 import DispatchModal from './DispatchModal';
 import PasswordModal from './PasswordModal';
 
@@ -27,6 +28,7 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
   const [deleteStartDate, setDeleteStartDate] = useState('');
   const [deleteEndDate, setDeleteEndDate] = useState('');
   const [typeTab, setTypeTab] = useState<TypeTab>('Masivo');
+  const { toast } = useToast();
 
   // Password modal state
   const [passwordModal, setPasswordModal] = useState<{
@@ -85,6 +87,7 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
         if (newKg === null) return;
         const kg = Number(newKg);
         if (isNaN(kg) || kg <= 0) throw new Error('Peso inválido');
+        if (!/^\d+(\.\d{1,3})?$/.test(newKg)) throw new Error('Máximo 3 decimales');
         await updateDespachoKg(despacho.id, kg, password);
         load();
         onOrderChange?.();
@@ -92,18 +95,82 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
     });
   }
 
-  function handleFinishWithDevolucion(order: Order) {
-    const saldo = order.kg - order.despachado_kg;
+function handleFinishWithDevolucion(order: Order) {
+    const saldo = round3(order.kg - order.despachado_kg);
+    if (saldo <= 0) return;
     setPasswordModal({
       open: true,
       title: 'Finalizar con devolución',
-      message: `Pedido: ${order.cliente} - ${order.sku}\nTotal: ${order.kg} kg | Despachado: ${order.despachado_kg} kg | Saldo: ${saldo} kg\n\n¿Desea marcar como devolución ${saldo} kg y finalizar el pedido?`,
+      message: `Pedido: ${order.cliente} - ${order.sku}\nTotal: ${round3(order.kg)} kg | Despachado: ${round3(order.despachado_kg)} kg | Saldo: ${round3(saldo)} kg\n\n¿Desea marcar como devolución ${round3(saldo)} kg y finalizar el pedido?`,
       action: async (password) => {
         await finishOrderWithDevolucion(order.id, saldo, password);
         load();
         onOrderChange?.();
       },
     });
+  }
+
+  const [reassignTarget, setReassignTarget] = useState<{ sourceOrder: Order; pendingKg: number; pendingRoutes: { cliente: string; kg: number }[] } | null>(null);
+  const [reassignModalOpen, setReassignModalOpen] = useState(false);
+
+  function handleReassignRoute(order: Order) {
+    const saldo = Math.round((order.kg - (order.despachado_kg ?? 0)) * 1000) / 1000;
+    if (saldo <= 0) {
+      alert('No hay kg pendientes para reasignar');
+      return;
+    }
+    const otherPending = pendingOrders.filter(o => o.id !== order.id);
+    if (otherPending.length === 0) {
+      alert('No hay otros pedidos pendientes para reasignar');
+      return;
+    }
+    setReassignTarget({ sourceOrder: order, pendingKg: saldo, pendingRoutes: otherPending.map(o => ({ cliente: o.cliente, kg: round3(o.kg - (o.despachado_kg ?? 0)) })) });
+    setReassignModalOpen(true);
+  }
+
+async function handleConfirmReassign(targetOrder: Order) {
+    const { sourceOrder, pendingKg } = reassignTarget!;
+    const newTargetKg = round3(targetOrder.kg + pendingKg);
+    const sourceSaldo = round3(sourceOrder.kg - (sourceOrder.despachado_kg ?? 0));
+    const willDeleteSource = pendingKg >= sourceSaldo;
+    const newSourceKg = willDeleteSource ? 0 : round3(sourceOrder.kg - pendingKg);
+    
+    if (!confirm(`Transferir ${pendingKg} kg de "${sourceOrder.cliente} - ${sourceOrder.sku}" a "${targetOrder.cliente} - ${targetOrder.sku}"?\n\nDestino: ${round3(targetOrder.kg)} → ${round3(newTargetKg)} kg\nOrigen: ${round3(sourceOrder.kg)} → ${round3(newSourceKg)} kg${willDeleteSource ? ' (se eliminará - saldo completo transferido)' : ''}`)) return;
+    try {
+      // Update target order: add kg
+      await updateOrderKg(targetOrder.id, newTargetKg);
+      // Update source order
+if (willDeleteSource) {
+        try {
+          await deleteOrder(sourceOrder.id);
+        } catch (deleteErr: any) {
+          console.error('Delete failed, setting kg to 0:', deleteErr);
+          await updateOrderKg(sourceOrder.id, 0);
+        }
+      } else {
+        await updateOrderKg(sourceOrder.id, newSourceKg);
+      }
+      // Log movement
+      const user = localStorage.getItem('current_user') || 'Sistema';
+      await createMovementLog({
+        origen_cliente: sourceOrder.cliente,
+        origen_sku: sourceOrder.sku,
+        origen_id: sourceOrder.id,
+        destino_cliente: targetOrder.cliente,
+        destino_sku: targetOrder.sku,
+        destino_id: targetOrder.id,
+        kg: pendingKg,
+        creado_por: user,
+      });
+      setReassignTarget(null);
+      setReassignModalOpen(false);
+      await load();
+      onOrderChange?.();
+      toast(willDeleteSource ? 'Pedido origen eliminado, kg transferidos al destino' : 'Kg transferidos y origen actualizado', 'success');
+    } catch (err: any) {
+      console.error('Reassign error:', err);
+      toast(err.message, 'error');
+    }
   }
 
   const filteredByDate = useMemo(() => {
@@ -120,9 +187,8 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
     return orders;
   }, [orders, period, date, weekInput]);
 
-  const pendingOrders = filteredByDate.filter(o => (o.despachado_kg ?? 0) < o.kg);
-  const doneOrders = filteredByDate.filter(o => (o.despachado_kg ?? 0) >= o.kg);
-
+const pendingOrders = filteredByDate.filter(o => round3(o.kg - (o.despachado_kg ?? 0)) > 0);
+const doneOrders = filteredByDate.filter(o => round3(o.kg - (o.despachado_kg ?? 0)) <= 0);
 
   const pendingMasivo = pendingOrders.filter(o => o.type === 'Masivo');
   const pendingVd = pendingOrders.filter(o => o.type === 'Venta Directa');
@@ -136,22 +202,6 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
     if (search && !o.cliente.toLowerCase().includes(search.toLowerCase()) && !o.sku.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
   });
-
-  if (loading && orders.length === 0) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
-      </div>
-    );
-  }
-  if (!loading && orders.length === 0) {
-    return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 text-center text-gray-500">
-        <Truck className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-        <p className="text-sm">No hay pedidos pendientes de despachar</p>
-      </div>
-    );
-  }
 
   function handleWeekChange(week: string) {
     setDeleteWeek(week);
@@ -170,6 +220,22 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
   const overdue = pendingOrders.filter(isOverdue);
   const d1 = overdue.filter(o => getOverdueDays(o.date, o.type) === 1).length;
   const many = overdue.length - d1;
+
+  if (loading && orders.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+  if (!loading && orders.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 text-center text-gray-500">
+        <Truck className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+        <p className="text-sm">No hay pedidos pendientes de despachar</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -264,9 +330,9 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
       ) : (
         <>
           {filteredPending.map(order => {
-            const saldo = order.kg - order.despachado_kg;
+            const saldo = round3(order.kg - order.despachado_kg);
             const despachos = despachosMap[order.id] || [];
-            const pct = (order.despachado_kg / order.kg) * 100;
+            const pct = round3((order.despachado_kg / order.kg) * 100);
             return (
               <div key={order.id} className={`rounded-lg shadow-sm border p-4 ${
                 isOverdue(order) ? 'bg-red-50 border-red-300' : 'bg-white border-gray-100'
@@ -291,37 +357,25 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
                       <p className="text-xs text-gray-400 mt-0.5">Fecha pedido: {order.date}</p>
                     </div>
                   </div>
-                  <button onClick={() => setDispatchOrder(order)}
-                    className="shrink-0 inline-flex items-center gap-1 bg-blue-600 text-white px-3 py-1.5 rounded-md text-sm font-medium hover:bg-blue-700">
-                    <Truck className="w-4 h-4" />
-                    Agregar vehículo
-                  </button>
                 </div>
 
-                <div className="space-y-1">
+                <div className="space-y-1 mb-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Despachado</span>
                     <span className="font-medium text-gray-900">
-                      {order.despachado_kg} kg / {order.kg} kg
+                      {round3(order.despachado_kg)} kg / {round3(order.kg)} kg
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-green-600">{order.despachado_kg} kg despachados</span>
-                    <span className="text-amber-600 font-medium">{saldo} kg saldo</span>
+                    <span className="text-green-600">{round3(order.despachado_kg)} kg despachados</span>
+                    <span className="text-amber-600 font-medium">{round3(saldo)} kg saldo</span>
                   </div>
-                  {saldo > 0 && (
-                    <button onClick={() => handleFinishWithDevolucion(order)}
-                      className="mt-2 w-full py-1.5 text-xs font-medium text-white bg-purple-600 rounded hover:bg-purple-700 flex items-center justify-center gap-1.5">
-                      <RotateCcw className="w-3 h-3" />
-                      Finalizar con devolución ({saldo} kg)
-                    </button>
-                  )}
                 </div>
 
-{despachos.length > 0 && (
+                {despachos.length > 0 && (
                   <div className="mt-3 bg-gray-50 rounded-md p-2 space-y-1">
                     <p className="text-xs font-medium text-gray-500">
                       Vehículo{despachos.length !== 1 ? 's' : ''} ({despachos.length})
@@ -339,11 +393,41 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
                         {d.date && <span>Fecha: {d.date}</span>}
                         {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
                         {d.created_by && <span className="text-gray-400">Por: {toUpperCase(d.created_by)}</span>}
-                        <button onClick={() => handleEditDespacho(d)} className="text-blue-600 hover:text-blue-800 underline text-[10px] px-1 py-0.5 rounded">Editar</button>
+                        <button onClick={() => handleEditDespacho(d)}
+                          className="text-blue-600 hover:text-blue-800 underline text-[10px] px-1 py-0.5 rounded"
+                          title="Editar peso">
+                          <Edit className="w-3 h-3 inline mr-0.5" /> Editar
+                        </button>
                       </div>
                     ))}
                   </div>
                 )}
+
+                {/* Botones en la parte inferior de la card */}
+                <div className="mt-4 pt-3 border-t border-gray-200 space-y-2">
+                  {despachos.length > 0 && saldo > 0 && (
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => handleFinishWithDevolucion(order)}
+                        className="inline-flex items-center gap-1 bg-red-600 text-white px-2.5 py-1 rounded text-xs font-medium hover:bg-red-700 shrink-0"
+                        title="Finalizar devolución">
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Devolución ({saldo} kg)</span>
+                      </button>
+                      <button onClick={() => handleReassignRoute(order)}
+                        className="inline-flex items-center gap-1 bg-green-600 text-white px-2.5 py-1 rounded text-xs font-medium hover:bg-green-700 shrink-0"
+                        title="Reasignar pendientes">
+                        <UserCog className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Reasignar</span>
+                      </button>
+                    </div>
+                  )}
+                  <button onClick={() => setDispatchOrder(order)}
+                    className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-blue-700"
+                    title="Agregar vehículo">
+                    <Truck className="w-4.5 h-4.5" />
+                    Agregar vehículo
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -372,25 +456,25 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
                           {order.created_by && <span className="text-xs text-green-500">Creado: {order.created_by}</span>}
                         </div>
                         <p className="text-xs text-green-500 pl-6">Fecha pedido: {order.date}</p>
-{despachos.map(d => (
-                      <div key={d.id} className="text-xs text-gray-700 flex flex-wrap gap-x-3 gap-y-0.5 items-center">
-                        <span>Placa: <strong>{d.placa}</strong></span>
-                        <span>PLC: {d.plc}</span>
-                        <span>{d.kg} kg</span>
-                        <span>Cargue: {d.cargue_time}</span>
-                        <span>Inicio: {d.cargue_start}</span>
-                        <span>Fin: {d.cargue_end}</span>
-                        {d.ruta && <span className="text-blue-600">Ruta: {toUpperCase(d.ruta)}</span>}
-                        {d.date && <span>Fecha: {d.date}</span>}
-                        {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
-                        {d.created_by && <span className="text-gray-400">Por: {toUpperCase(d.created_by)}</span>}
-                        <button onClick={() => handleEditDespacho(d)}
-                          className="text-blue-600 hover:text-blue-800 underline text-[10px] px-1 py-0.5 rounded"
-                          title="Editar peso">
-                          <Edit className="w-3 h-3 inline mr-0.5" /> Editar
-                        </button>
-                      </div>
-                    ))}
+                        {despachos.map(d => (
+                          <div key={d.id} className="text-xs text-gray-700 flex flex-wrap gap-x-3 gap-y-0.5 items-center">
+                            <span>Placa: <strong>{d.placa}</strong></span>
+                            <span>PLC: {d.plc}</span>
+                            <span>{d.kg} kg</span>
+                            <span>Cargue: {d.cargue_time}</span>
+                            <span>Inicio: {d.cargue_start}</span>
+                            <span>Fin: {d.cargue_end}</span>
+                            {d.ruta && <span className="text-blue-600">Ruta: {toUpperCase(d.ruta)}</span>}
+                            {d.date && <span>Fecha: {d.date}</span>}
+                            {d.created_at && <span>Registrado: {d.created_at.slice(0, 16).replace('T', ' ')}</span>}
+                            {d.created_by && <span className="text-gray-400">Por: {toUpperCase(d.created_by)}</span>}
+                            <button onClick={() => handleEditDespacho(d)}
+                              className="text-blue-600 hover:text-blue-800 underline text-[10px] px-1 py-0.5 rounded"
+                              title="Editar peso">
+                              <Edit className="w-3 h-3 inline mr-0.5" /> Editar
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     );
                   })}
@@ -417,6 +501,43 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
           onConfirm={passwordModal.action}
           onCancel={() => setPasswordModal(null)}
         />
+      )}
+
+      {reassignModalOpen && reassignTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-5 space-y-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Reasignar <span className="text-blue-600">{reassignTarget.pendingKg} kg</span> pendientes
+            </h2>
+            <p className="text-sm text-gray-600">
+              De: <strong>{reassignTarget.sourceOrder.cliente}</strong> - {reassignTarget.sourceOrder.sku}
+            </p>
+            <p className="text-sm text-gray-600">Seleccione pedido destino (pendientes):</p>
+            <div className="max-h-60 overflow-y-auto space-y-2">
+              {reassignTarget.pendingRoutes.length === 0 ? (
+                <p className="text-center text-gray-500 py-4">No hay otros pedidos pendientes</p>
+              ) : (
+                reassignTarget.pendingRoutes.map((r, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      const target = pendingOrders.find(o => o.cliente === r.cliente && o.id !== reassignTarget.sourceOrder.id);
+                      if (target) handleConfirmReassign(target);
+                    }}
+                    className="w-full text-left p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <p className="font-medium text-gray-900">{r.cliente}</p>
+                    <p className="text-xs text-gray-500">Saldo pendiente: {r.kg} kg</p>
+                  </button>
+                ))
+              )}
+            </div>
+            <button onClick={() => { setReassignTarget(null); setReassignModalOpen(false); }}
+              className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium">
+              Cancelar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

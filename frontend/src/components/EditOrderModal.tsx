@@ -74,7 +74,7 @@ export default function EditOrderModal({ order, onSave, onClose }: Props) {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-0.5">Kg</label>
-              <input type="number" step="0.01" min="0.01" {...register('kg', { required: true, min: 0.01 })}
+              <input type="number" step="0.001" min="0.01" {...register('kg', { required: true, min: 0.01, pattern: { value: /^\d+(\.\d{1,3})?$/, message: 'Máximo 3 decimales' } })}
                 className="w-full rounded-md border border-gray-300 px-2.5 py-1.5 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>

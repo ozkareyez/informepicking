@@ -58,7 +58,7 @@ const NAV_GROUPS: NavGroup[] = [
   {
     title: 'Administración',
     icon: Settings,
-    defaultOpen: false,
+    defaultOpen: true,
     items: [
       { id: 'pedidos', label: 'Listado de Pedidos', icon: ClipboardList, path: '/pedidos' },
       { id: 'operarios', label: 'Operarios', icon: Users, path: '/operarios' },

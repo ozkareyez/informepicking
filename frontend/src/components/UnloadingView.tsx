@@ -57,6 +57,7 @@ export default function UnloadingView() {
 
     if (!ptm.trim()) { setError('El número PTM es obligatorio'); return; }
     if (!kg || parseFloat(kg) <= 0) { setError('El peso debe ser mayor a 0'); return; }
+    if (!/^\d+(\.\d{1,3})?$/.test(kg)) { setError('Máximo 3 decimales'); return; }
     if (!startTime) { setError('La hora de inicio es obligatoria'); return; }
     if (!endTime) { setError('La hora de fin es obligatoria'); return; }
     if (endTime <= startTime) { setError('La hora fin debe ser mayor a la hora inicio'); return; }
@@ -139,9 +140,7 @@ export default function UnloadingView() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Peso (kg)</label>
-              <input type="number" value={kg} onChange={e => setKg(e.target.value)}
-                placeholder="Ej: 25000" min="0.01" step="0.01"
-                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
+              <input type="number" value={kg} onChange={e => setKg(e.target.value)} onBlur={e => { if (e.target.value && !/^\d+(\.\d{1,3})?$/.test(e.target.value)) setKg(''); }} placeholder="Ej: 25000" min="0.01" step="0.001" className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500" />
             </div>
             <div />
           </div>
