@@ -431,6 +431,8 @@ export async function getDashboard(params: { period?: string; date?: string } = 
       operator, total_kg: d.total_kg, total_orders: d.total_orders,
       avg_kg_per_hour: d.total_orders > 0 ? Math.round((d.sum_kgph / d.total_orders) * 100) / 100 : 0,
       avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+      orders_con_novedad: 0,
+      pct_novedad: 0,
     })).sort((a, b) => b.total_kg - a.total_kg),
     productionByDay: Array.from(dayMap.entries()).map(([date, d]) => ({
       date, total_kg: d.total_kg, total_orders: d.total_orders,

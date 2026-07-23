@@ -263,22 +263,25 @@ export default function DashboardProduccion() {
             <TrendingUp className="w-4 h-4 text-purple-600" /> Eficiencia por operario
           </h3>
           <div className="space-y-2">
-            {data.kgByOperator.map(op => (
-              <div key={op.operator} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
-                    <span className="text-xs font-medium text-purple-700">{op.operator.charAt(0)}</span>
+            {data.kgByOperator.map(op => {
+              const effAjustada = Math.round((op.avg_efficiency - op.pct_novedad) * 100) / 100;
+              return (
+                <div key={op.operator} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                      <span className="text-xs font-medium text-purple-700">{op.operator.charAt(0)}</span>
+                    </div>
+                    <span className="text-sm font-medium text-gray-900">{op.operator}</span>
                   </div>
-                  <span className="text-sm font-medium text-gray-900">{op.operator}</span>
+                  <div className="text-right text-sm">
+                    <p className={`font-semibold ${effAjustada >= 100 ? 'text-emerald-600' : effAjustada >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
+                      {effAjustada.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-gray-500">{op.avg_kg_per_hour.toFixed(1)} kg/h{op.pct_novedad > 0 && <span className="text-amber-500"> · −{op.pct_novedad.toFixed(1)}% nov.</span>}</p>
+                  </div>
                 </div>
-                <div className="text-right text-sm">
-                  <p className={`font-semibold ${op.avg_efficiency >= 100 ? 'text-emerald-600' : op.avg_efficiency >= 80 ? 'text-amber-600' : 'text-red-600'}`}>
-                    {op.avg_efficiency.toFixed(1)}%
-                  </p>
-                  <p className="text-xs text-gray-500">{op.avg_kg_per_hour.toFixed(1)} kg/h</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -390,6 +393,7 @@ export default function DashboardProduccion() {
           <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
             <Users className="w-4 h-4 text-blue-600" /> Rendimiento por operario
           </h3>
+          <p className="text-[10px] text-gray-400 mt-0.5">Eficiencia ajustada = Eficiencia base − % pedidos con novedad</p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
@@ -399,25 +403,51 @@ export default function DashboardProduccion() {
                 <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Pedidos</th>
                 <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Kg</th>
                 <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Kg/h</th>
-                <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Eficiencia</th>
+                <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Eficiencia base</th>
+                <th className="px-3 py-2 text-center font-medium text-gray-500 uppercase">Novedades</th>
+                <th className="px-3 py-2 text-right font-medium text-gray-500 uppercase">Eficiencia ajustada</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {data.kgByOperator.map(op => (
-                <tr key={op.operator} className="hover:bg-gray-50">
-                  <td className="px-3 py-2 font-medium text-gray-900">{op.operator}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{op.total_orders}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{op.total_kg.toLocaleString()}</td>
-                  <td className="px-3 py-2 text-right text-gray-700">{op.avg_kg_per_hour.toFixed(2)}</td>
-                  <td className="px-3 py-2 text-right">
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-                      op.avg_efficiency >= 100 ? 'bg-green-100 text-green-800' : op.avg_efficiency >= 80 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
-                    }`}>
-                      {op.avg_efficiency.toFixed(2)}%
-                    </span>
-                  </td>
-                </tr>
-              ))}
+              {data.kgByOperator.map(op => {
+                const effAjustada = Math.round((op.avg_efficiency - op.pct_novedad) * 100) / 100;
+                return (
+                  <tr key={op.operator} className="hover:bg-gray-50">
+                    <td className="px-3 py-2 font-medium text-gray-900">{op.operator}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{op.total_orders}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{op.total_kg.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{op.avg_kg_per_hour.toFixed(2)}</td>
+                    <td className="px-3 py-2 text-right">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                        op.avg_efficiency >= 100 ? 'bg-green-100 text-green-800' : op.avg_efficiency >= 80 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {op.avg_efficiency.toFixed(2)}%
+                      </span>
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {op.orders_con_novedad > 0 ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-100 text-amber-800">
+                          {op.orders_con_novedad}/{op.total_orders} pedidos
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800">
+                          Sin novedad
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                        effAjustada >= 100 ? 'bg-green-100 text-green-800' : effAjustada >= 80 ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800'
+                      }`}>
+                        {effAjustada.toFixed(2)}%
+                      </span>
+                      {op.pct_novedad > 0 && (
+                        <span className="text-[9px] text-amber-600 block">−{op.pct_novedad.toFixed(2)}%</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

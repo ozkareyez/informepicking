@@ -272,14 +272,21 @@ export async function getDashboard(params: { period?: string; date?: string } = 
     return m ? s + parseInt(m[1]) + parseInt(m[2]) / 60 : s;
   }, 0);
 
-  const opMap = new Map<string, { total_kg: number; total_orders: number; sum_kgph: number; sum_eff: number }>();
+  // Build set of order_ids that have despachos with novedades
+  const ordersConNovedad = new Set<number>();
+  for (const d of despachos) {
+    if (d.novedad) ordersConNovedad.add(d.order_id);
+  }
+
+  const opMap = new Map<string, { total_kg: number; total_orders: number; sum_kgph: number; sum_eff: number; orders_con_novedad: number }>();
   const dayMap = new Map<string, { total_kg: number; total_orders: number; sum_eff: number }>();
   const typeMap = new Map<string, { total_kg: number; total_orders: number; sum_eff: number }>();
 
   for (const o of completed) {
     let op = opMap.get(o.operator);
-    if (!op) { op = { total_kg: 0, total_orders: 0, sum_kgph: 0, sum_eff: 0 }; opMap.set(o.operator, op); }
+    if (!op) { op = { total_kg: 0, total_orders: 0, sum_kgph: 0, sum_eff: 0, orders_con_novedad: 0 }; opMap.set(o.operator, op); }
     op.total_kg += o.kg; op.total_orders++; op.sum_kgph += o.kg_per_hour ?? 0; op.sum_eff += o.efficiency ?? 0;
+    if (ordersConNovedad.has(o.id)) op.orders_con_novedad++;
 
     let d = dayMap.get(o.date);
     if (!d) { d = { total_kg: 0, total_orders: 0, sum_eff: 0 }; dayMap.set(o.date, d); }
@@ -310,6 +317,8 @@ export async function getDashboard(params: { period?: string; date?: string } = 
       operator, total_kg: d.total_kg, total_orders: d.total_orders,
       avg_kg_per_hour: d.total_orders > 0 ? Math.round((d.sum_kgph / d.total_orders) * 100) / 100 : 0,
       avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+      orders_con_novedad: d.orders_con_novedad,
+      pct_novedad: d.total_orders > 0 ? Math.round((d.orders_con_novedad / d.total_orders) * 10000) / 100 : 0,
     })).sort((a, b) => b.total_kg - a.total_kg),
     productionByDay: Array.from(dayMap.entries()).map(([date, d]) => ({
       date, total_kg: d.total_kg, total_orders: d.total_orders,

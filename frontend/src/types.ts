@@ -75,7 +75,7 @@ export interface DashboardData {
   avg_kg_per_hour: number;
   avg_efficiency: number;
   total_hours: number;
-  kgByOperator: { operator: string; total_kg: number; avg_kg_per_hour: number; avg_efficiency: number; total_orders: number }[];
+  kgByOperator: { operator: string; total_kg: number; avg_kg_per_hour: number; avg_efficiency: number; total_orders: number; orders_con_novedad: number; pct_novedad: number }[];
   productionByDay: { date: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
   productionByType: { type: string; total_kg: number; total_orders: number; avg_efficiency: number }[];
   despachos: { total_kg: number; total_vehiculos: number; total_rutas: number; avg_kg_per_hour: number; avg_efficiency: number };
