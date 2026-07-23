@@ -28,6 +28,7 @@ function mapOrder(row: any): Order {
     cargue_time: row.cargue_time ?? null,
     despachado_kg: Number(row.despachado_kg ?? 0),
     devolucion_kg: Number(row.devolucion_kg ?? 0),
+    notas_devolucion: row.notas_devolucion ?? '',
     created_by: row.created_by ?? '',
     created_at: row.created_at,
   };
@@ -767,25 +768,29 @@ export async function updateDespachoKg(despachoId: number, newKg: number, passwo
   }).eq('id', despacho.order_id);
 }
 
-export async function finishOrderWithDevolucion(orderId: number, devolucionKg: number, password: string): Promise<Order> {
+export async function finishOrderWithDevolucion(orderId: number, devolucionKg: number, password: string, notas: string = ''): Promise<Order> {
   await validateAdminPassword(password);
 
-  const { data: order, error: fetchError } = await getSupabase().from('orders').select('kg, despachado_kg, devolucion_kg, status').eq('id', orderId).single();
+  const { data: order, error: fetchError } = await getSupabase().from('orders').select('kg, despachado_kg, devolucion_kg, status, notas_devolucion').eq('id', orderId).single();
   if (fetchError || !order) throw new Error('Pedido no encontrado');
 
   const currentDespachado = Number(order?.despachado_kg ?? 0);
   const currentDevolucion = Number(order?.devolucion_kg ?? 0);
   const totalKg = Number(order?.kg ?? 0);
-  const newDevolucion = currentDevolucion + devolucionKg;
-  const totalAccounted = currentDespachado + newDevolucion;
+  const newDevolucion = Math.round((currentDevolucion + devolucionKg) * 100) / 100;
+  const totalAccounted = Math.round((currentDespachado + newDevolucion) * 100) / 100;
+  const totalKgRounded = Math.round(totalKg * 100) / 100;
 
   if (devolucionKg < 0) throw new Error('La devolución no puede ser negativa');
-  if (totalAccounted > totalKg) throw new Error(`La devolución (${devolucionKg} kg) excede el saldo disponible`);
+  if (totalAccounted > totalKgRounded + 0.01) throw new Error(`La devolución (${devolucionKg} kg) excede el saldo disponible`);
 
-  const newStatus = totalAccounted >= totalKg ? 'despachado' : order.status;
+  const newStatus = totalAccounted >= totalKgRounded - 0.01 ? 'despachado' : order.status;
+  const existingNotes = order?.notas_devolucion ?? '';
+  const combinedNotes = [existingNotes, notas].filter(Boolean).join(' | ');
 
   const { data: updatedOrder, error: updateError } = await getSupabase().from('orders').update({
     devolucion_kg: newDevolucion,
+    notas_devolucion: combinedNotes,
     status: newStatus,
   }).eq('id', orderId).select().single();
   if (updateError) throw new Error(updateError.message);

@@ -235,6 +235,6 @@ export async function updateDespachoKg(despachoId: number, newKg: number, passwo
   return active.updateDespachoKg(despachoId, newKg, password);
 }
 
-export async function finishOrderWithDevolucion(orderId: number, devolucionKg: number, password: string): Promise<Order> {
-  return active.finishOrderWithDevolucion(orderId, devolucionKg, password);
+export async function finishOrderWithDevolucion(orderId: number, devolucionKg: number, password: string, notas: string = ''): Promise<Order> {
+  return active.finishOrderWithDevolucion(orderId, devolucionKg, password, notas);
 }

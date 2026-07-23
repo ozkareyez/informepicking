@@ -249,6 +249,7 @@ export async function createOrder(data: RegisterOrderData): Promise<Order> {
     cargue_time: null,
     despachado_kg: 0,
     devolucion_kg: 0,
+    notas_devolucion: '',
     created_by: localStorage.getItem('current_user') || '',
     created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
   };
@@ -282,6 +283,7 @@ export async function createOrders(items: RegisterOrderData[]): Promise<number> 
       cargue_time: null,
       despachado_kg: 0,
       devolucion_kg: 0,
+      notas_devolucion: '',
       created_by: localStorage.getItem('current_user') || '',
       created_at: new Date().toISOString().replace('T', ' ').slice(0, 19),
     };

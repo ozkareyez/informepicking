@@ -3,8 +3,9 @@ import { Truck, Package, Search, CheckCircle, AlertTriangle, Calendar, Edit, Rot
 import { getOrdersForDispatch, getDespachos, createDespacho, updateDespachoKg, finishOrderWithDevolucion, updateOrder, updateOrderKg, deleteOrder, createMovementLog } from '../api';
 import { useToast } from '../store';
 import type { Order, Despacho } from '../types';
-import { getOverdueDays, getToday, getWeekRange, getWeekNumber, toUpperCase, round3 } from '../utils';
+import { getOverdueDays, getToday, getWeekRange, getWeekNumber, toUpperCase, round2 } from '../utils';
 import DispatchModal from './DispatchModal';
+import DevolucionModal from './DevolucionModal';
 import PasswordModal from './PasswordModal';
 
 function isOverdue(order: Order): boolean {
@@ -30,7 +31,10 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
   const [typeTab, setTypeTab] = useState<TypeTab>('Masivo');
   const { toast } = useToast();
 
-  // Password modal state
+  // Devolucion modal state
+  const [devolucionOrder, setDevolucionOrder] = useState<Order | null>(null);
+
+  // Password modal state (for edit despacho)
   const [passwordModal, setPasswordModal] = useState<{
     open: boolean;
     title: string;
@@ -96,25 +100,25 @@ export default function DispatchView({ onOrderChange }: { onOrderChange?: () => 
   }
 
 function handleFinishWithDevolucion(order: Order) {
-    const saldo = round3(order.kg - order.despachado_kg);
+    const saldo = round2(order.kg - order.despachado_kg);
     if (saldo <= 0) return;
-    setPasswordModal({
-      open: true,
-      title: 'Finalizar con devolución',
-      message: `Pedido: ${order.cliente} - ${order.sku}\nTotal: ${round3(order.kg)} kg | Despachado: ${round3(order.despachado_kg)} kg | Saldo: ${round3(saldo)} kg\n\n¿Desea marcar como devolución ${round3(saldo)} kg y finalizar el pedido?`,
-      action: async (password) => {
-        await finishOrderWithDevolucion(order.id, saldo, password);
-        load();
-        onOrderChange?.();
-      },
-    });
+    setDevolucionOrder(order);
+  }
+
+  async function handleConfirmDevolucion(password: string, notas: string) {
+    if (!devolucionOrder) return;
+    const saldo = round2(devolucionOrder.kg - devolucionOrder.despachado_kg);
+    await finishOrderWithDevolucion(devolucionOrder.id, saldo, password, notas);
+    setDevolucionOrder(null);
+    load();
+    onOrderChange?.();
   }
 
   const [reassignTarget, setReassignTarget] = useState<{ sourceOrder: Order; pendingKg: number; pendingRoutes: { cliente: string; kg: number }[] } | null>(null);
   const [reassignModalOpen, setReassignModalOpen] = useState(false);
 
   function handleReassignRoute(order: Order) {
-    const saldo = Math.round((order.kg - (order.despachado_kg ?? 0)) * 1000) / 1000;
+    const saldo = round2(order.kg - (order.despachado_kg ?? 0));
     if (saldo <= 0) {
       alert('No hay kg pendientes para reasignar');
       return;
@@ -124,18 +128,18 @@ function handleFinishWithDevolucion(order: Order) {
       alert('No hay otros pedidos pendientes para reasignar');
       return;
     }
-    setReassignTarget({ sourceOrder: order, pendingKg: saldo, pendingRoutes: otherPending.map(o => ({ cliente: o.cliente, kg: round3(o.kg - (o.despachado_kg ?? 0)) })) });
+    setReassignTarget({ sourceOrder: order, pendingKg: saldo, pendingRoutes: otherPending.map(o => ({ cliente: o.cliente, kg: round2(o.kg - (o.despachado_kg ?? 0)) })) });
     setReassignModalOpen(true);
   }
 
 async function handleConfirmReassign(targetOrder: Order) {
     const { sourceOrder, pendingKg } = reassignTarget!;
-    const newTargetKg = round3(targetOrder.kg + pendingKg);
-    const sourceSaldo = round3(sourceOrder.kg - (sourceOrder.despachado_kg ?? 0));
+    const newTargetKg = round2(targetOrder.kg + pendingKg);
+    const sourceSaldo = round2(sourceOrder.kg - (sourceOrder.despachado_kg ?? 0));
     const willDeleteSource = pendingKg >= sourceSaldo;
-    const newSourceKg = willDeleteSource ? 0 : round3(sourceOrder.kg - pendingKg);
+    const newSourceKg = willDeleteSource ? 0 : round2(sourceOrder.kg - pendingKg);
     
-    if (!confirm(`Transferir ${pendingKg} kg de "${sourceOrder.cliente} - ${sourceOrder.sku}" a "${targetOrder.cliente} - ${targetOrder.sku}"?\n\nDestino: ${round3(targetOrder.kg)} → ${round3(newTargetKg)} kg\nOrigen: ${round3(sourceOrder.kg)} → ${round3(newSourceKg)} kg${willDeleteSource ? ' (se eliminará - saldo completo transferido)' : ''}`)) return;
+    if (!confirm(`Transferir ${pendingKg} kg de "${sourceOrder.cliente} - ${sourceOrder.sku}" a "${targetOrder.cliente} - ${targetOrder.sku}"?\n\nDestino: ${round2(targetOrder.kg)} → ${round2(newTargetKg)} kg\nOrigen: ${round2(sourceOrder.kg)} → ${round2(newSourceKg)} kg${willDeleteSource ? ' (se eliminará - saldo completo transferido)' : ''}`)) return;
     try {
       // Update target order: add kg
       await updateOrderKg(targetOrder.id, newTargetKg);
@@ -187,8 +191,8 @@ if (willDeleteSource) {
     return orders;
   }, [orders, period, date, weekInput]);
 
-const pendingOrders = filteredByDate.filter(o => round3(o.kg - (o.despachado_kg ?? 0)) > 0);
-const doneOrders = filteredByDate.filter(o => round3(o.kg - (o.despachado_kg ?? 0)) <= 0);
+const pendingOrders = filteredByDate.filter(o => round2(o.kg - (o.despachado_kg ?? 0)) > 0);
+const doneOrders = filteredByDate.filter(o => round2(o.kg - (o.despachado_kg ?? 0)) <= 0);
 
   const pendingMasivo = pendingOrders.filter(o => o.type === 'Masivo');
   const pendingVd = pendingOrders.filter(o => o.type === 'Venta Directa');
@@ -330,9 +334,9 @@ const doneOrders = filteredByDate.filter(o => round3(o.kg - (o.despachado_kg ?? 
       ) : (
         <>
           {filteredPending.map(order => {
-            const saldo = round3(order.kg - order.despachado_kg);
+            const saldo = round2(order.kg - order.despachado_kg);
             const despachos = despachosMap[order.id] || [];
-            const pct = round3((order.despachado_kg / order.kg) * 100);
+            const pct = round2((order.despachado_kg / order.kg) * 100);
             return (
               <div key={order.id} className={`rounded-lg shadow-sm border p-4 ${
                 isOverdue(order) ? 'bg-red-50 border-red-300' : 'bg-white border-gray-100'
@@ -363,15 +367,15 @@ const doneOrders = filteredByDate.filter(o => round3(o.kg - (o.despachado_kg ?? 
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-600">Despachado</span>
                     <span className="font-medium text-gray-900">
-                      {round3(order.despachado_kg)} kg / {round3(order.kg)} kg
+                      {round2(order.despachado_kg)} kg / {round2(order.kg)} kg
                     </span>
                   </div>
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${Math.min(pct, 100)}%` }} />
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-green-600">{round3(order.despachado_kg)} kg despachados</span>
-                    <span className="text-amber-600 font-medium">{round3(saldo)} kg saldo</span>
+                    <span className="text-green-600">{round2(order.despachado_kg)} kg despachados</span>
+                    <span className="text-amber-600 font-medium">{round2(saldo)} kg saldo</span>
                   </div>
                 </div>
 
@@ -500,6 +504,14 @@ const doneOrders = filteredByDate.filter(o => round3(o.kg - (o.despachado_kg ?? 
           message={passwordModal.message}
           onConfirm={passwordModal.action}
           onCancel={() => setPasswordModal(null)}
+        />
+      )}
+
+      {devolucionOrder && (
+        <DevolucionModal
+          order={devolucionOrder}
+          onConfirm={handleConfirmDevolucion}
+          onCancel={() => setDevolucionOrder(null)}
         />
       )}
 

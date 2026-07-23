@@ -59,8 +59,8 @@ export function formatNumber(num: number, decimals: number = 2): string {
   return num.toLocaleString('es-ES', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 }
 
-export function round3(n: number): number {
-  return Math.round(n * 1000) / 1000;
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 export function getWeekNumber(dateStr: string): number {

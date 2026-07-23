@@ -51,6 +51,9 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
   const [expandedOrderId, setExpandedOrderId] = useState<number | null>(null);
   const [despachosMap, setDespachosMap] = useState<Record<number, Despacho[]>>({});
   const [activeTab, setActiveTab] = useState<'pedidos' | 'despachos' | 'descargues' | 'citas'>('pedidos');
+  const [despachoSearch, setDespachoSearch] = useState('');
+  const [descargueSearch, setDescargueSearch] = useState('');
+  const [citaSearch, setCitaSearch] = useState('');
 
   useEffect(() => {
     load();
@@ -226,6 +229,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
           'Tiempo cargue': '',
           'Kg despachados': o.despachado_kg,
           'Devolución kg': o.devolucion_kg ?? 0,
+          'Devolución a bodega': o.notas_devolucion || (o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : ''),
           'Estado final': o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : '',
           'Días retraso': diasRetraso,
         });
@@ -246,6 +250,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
             'Tiempo cargue': d.cargue_time,
             'Kg despachados': d.kg,
             'Devolución kg': o.devolucion_kg ?? 0,
+            'Devolución a bodega': o.notas_devolucion || (o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : ''),
             'Estado final': o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : '',
             'Días retraso': diasRetraso,
             'Novedad cargue': d.novedad ? 'Sí' : 'No',
@@ -260,7 +265,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       { wch: 8 }, { wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 14 },
       { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 10 },
       { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
-      { wch: 12 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 20 },
+      { wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 20 },
     ];
     applyHeaderStyle(wsReg);
     XLSX.utils.book_append_sheet(wb, wsReg, 'Registros');
@@ -452,9 +457,12 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         const despachos = despachosMap[o.id] || [];
         const plcs = despachos.map(d => d.plc).filter(Boolean).join(' ').toLowerCase();
         const placas = despachos.map(d => d.placa).filter(Boolean).join(' ').toLowerCase();
+        const rutas = despachos.map(d => d.ruta).filter(Boolean).join(' ').toLowerCase();
         return o.cliente.toLowerCase().includes(search) ||
+               o.sku.toLowerCase().includes(search) ||
                plcs.includes(search) ||
-               placas.includes(search);
+               placas.includes(search) ||
+               rutas.includes(search);
       });
     }
     if (date) result = result.filter(o => o.date === date);
@@ -485,7 +493,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex-1 min-w-[140px] relative">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-            <input type="text" placeholder="Buscar cliente, placa o PLC..." value={cliente}
+            <input type="text" placeholder="Buscar cliente, PLC, placa, ruta o SKU..." value={cliente}
               onChange={e => { setCliente(e.target.value); setPage(0); }}
               className="w-full pl-8 pr-2.5 py-1.5 rounded-md border border-gray-300 text-sm focus:ring-2 focus:ring-blue-500" />
           </div>
@@ -817,6 +825,14 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         {/* Despachos Table */}
         {activeTab === 'despachos' && (
           <>
+            <div className="mb-3">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input type="text" placeholder="Buscar por ruta, placa, PLC u orden..." value={despachoSearch}
+                  onChange={e => setDespachoSearch(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 rounded-md border border-gray-300 text-sm focus:ring-2 focus:ring-green-500" />
+              </div>
+            </div>
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -838,10 +854,24 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {despachos.length === 0 ? (
+                  {despachos.filter(d => {
+                    if (!despachoSearch) return true;
+                    const s = despachoSearch.toLowerCase();
+                    return (d.ruta || '').toLowerCase().includes(s) ||
+                           (d.placa || '').toLowerCase().includes(s) ||
+                           (d.plc || '').toLowerCase().includes(s) ||
+                           String(d.order_id).includes(s);
+                  }).length === 0 ? (
                     <tr><td colSpan={14} className="px-3 py-8 text-center text-gray-500 text-sm">No hay despachos</td></tr>
                   ) : (
-                    despachos.map(d => (
+                    despachos.filter(d => {
+                      if (!despachoSearch) return true;
+                      const s = despachoSearch.toLowerCase();
+                      return (d.ruta || '').toLowerCase().includes(s) ||
+                             (d.placa || '').toLowerCase().includes(s) ||
+                             (d.plc || '').toLowerCase().includes(s) ||
+                             String(d.order_id).includes(s);
+                    }).map(d => (
                       <tr key={d.id} className="hover:bg-gray-50">
                         <td className="px-3 py-2 text-xs text-gray-900">{d.date}</td>
                         <td className="px-3 py-2 text-xs font-medium text-gray-900">#{d.order_id}</td>
@@ -884,6 +914,14 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         {/* Descargues Table */}
         {activeTab === 'descargues' && (
           <>
+            <div className="mb-3">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input type="text" placeholder="Buscar por PTM, operarios, novedad..." value={descargueSearch}
+                  onChange={e => setDescargueSearch(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 rounded-md border border-gray-300 text-sm focus:ring-2 focus:ring-amber-500" />
+              </div>
+            </div>
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -903,10 +941,26 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {unloadings.length === 0 ? (
+                  {unloadings.filter(u => {
+                    if (!descargueSearch) return true;
+                    const s = descargueSearch.toLowerCase();
+                    return (u.ptm || '').toLowerCase().includes(s) ||
+                           (u.operators || []).join(' ').toLowerCase().includes(s) ||
+                           (u.novedad || '').toLowerCase().includes(s) ||
+                           (u.created_by || '').toLowerCase().includes(s) ||
+                           (u.date || '').toLowerCase().includes(s);
+                  }).length === 0 ? (
                     <tr><td colSpan={12} className="px-3 py-8 text-center text-gray-500 text-sm">No hay descargues</td></tr>
                   ) : (
-                    unloadings.map(u => (
+                    unloadings.filter(u => {
+                      if (!descargueSearch) return true;
+                      const s = descargueSearch.toLowerCase();
+                      return (u.ptm || '').toLowerCase().includes(s) ||
+                             (u.operators || []).join(' ').toLowerCase().includes(s) ||
+                             (u.novedad || '').toLowerCase().includes(s) ||
+                             (u.created_by || '').toLowerCase().includes(s) ||
+                             (u.date || '').toLowerCase().includes(s);
+                    }).map(u => (
                       <tr key={u.id} className="hover:bg-gray-50">
                         <td className="px-3 py-2 text-xs text-gray-900">{u.date}</td>
                         <td className="px-3 py-2 text-xs font-medium text-gray-900">{u.ptm}</td>
@@ -947,6 +1001,14 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
         {/* Citas Table */}
         {activeTab === 'citas' && (
           <>
+            <div className="mb-3">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                <input type="text" placeholder="Buscar por ruta, placa, PLC, tipo..." value={citaSearch}
+                  onChange={e => setCitaSearch(e.target.value)}
+                  className="w-full pl-8 pr-2.5 py-1.5 rounded-md border border-gray-300 text-sm focus:ring-2 focus:ring-purple-500" />
+              </div>
+            </div>
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50">
@@ -968,10 +1030,28 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {citas.length === 0 ? (
+                  {citas.filter(c => {
+                    if (!citaSearch) return true;
+                    const s = citaSearch.toLowerCase();
+                    return (c.ruta || '').toLowerCase().includes(s) ||
+                           (c.placa || '').toLowerCase().includes(s) ||
+                           (c.plc || '').toLowerCase().includes(s) ||
+                           (c.tipo || '').toLowerCase().includes(s) ||
+                           (c.observaciones || '').toLowerCase().includes(s) ||
+                           (c.created_by || '').toLowerCase().includes(s);
+                  }).length === 0 ? (
                     <tr><td colSpan={14} className="px-3 py-8 text-center text-gray-500 text-sm">No hay citas</td></tr>
                   ) : (
-                    citas.map(c => (
+                    citas.filter(c => {
+                      if (!citaSearch) return true;
+                      const s = citaSearch.toLowerCase();
+                      return (c.ruta || '').toLowerCase().includes(s) ||
+                             (c.placa || '').toLowerCase().includes(s) ||
+                             (c.plc || '').toLowerCase().includes(s) ||
+                             (c.tipo || '').toLowerCase().includes(s) ||
+                             (c.observaciones || '').toLowerCase().includes(s) ||
+                             (c.created_by || '').toLowerCase().includes(s);
+                    }).map(c => (
                       <tr key={c.id} className="hover:bg-gray-50">
                         <td className="px-3 py-2 text-xs font-medium text-gray-900">{toUpperCase(c.ruta)}</td>
                         <td className="px-3 py-2 text-xs font-mono text-gray-700">{toUpperCase(c.placa)}</td>

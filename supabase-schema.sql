@@ -63,6 +63,11 @@ CREATE POLICY "Todos pueden eliminar orders"
 -- ALTER TABLE orders ADD CONSTRAINT orders_status_check CHECK (status IN ('sin_operario', 'pending', 'completed', 'despachado'));
 
 -- ============================================================
+-- 📝 Notas de devolución (opcional al finalizar con devolución)
+-- ============================================================
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS notas_devolucion TEXT DEFAULT '';
+
+-- ============================================================
 -- 📦 Despachos (cada vehículo que se carga de un pedido)
 -- ============================================================
 CREATE TABLE despachos (

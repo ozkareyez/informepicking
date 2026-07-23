@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { X, Truck, Save, Package, MapPin, AlertTriangle, AlertCircle } from 'lucide-react';
 import type { Order, Despacho, CitaCargue } from '../types';
-import { getCurrentTime, calculateCargueTime, getToday, toUpperCase } from '../utils';
+import { getCurrentTime, calculateCargueTime, getToday, toUpperCase, round2 } from '../utils';
 
 interface Props {
   order: Order;
@@ -22,7 +22,7 @@ interface Props {
 }
 
 export default function DispatchModal({ order, despachos, onSave, onClose, cita }: Props) {
-  const saldo = order.kg - order.despachado_kg;
+  const saldo = round2(order.kg - order.despachado_kg);
   const existingRuta = despachos.length > 0 ? despachos[0].ruta : '';
   const citaRuta = cita?.ruta || '';
   const citaPlaca = cita?.placa || '';
