@@ -16,6 +16,7 @@ export default defineConfig({
         theme_color: '#2563eb',
         background_color: '#f9fafb',
         display: 'standalone',
+        version: '2.0.1',
         icons: [
           {
             src: '/icons/icon-192.svg',
@@ -32,14 +33,15 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg}'],
+        globPatterns: ['**/*.{js,css,svg}'],
+        navigateFallbackDenylist: [/^\/api/],
         runtimeCaching: [
           {
             urlPattern: /^https?:\/\/.*/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'external',
-              expiration: { maxEntries: 50, maxAgeSeconds: 86400 },
+              expiration: { maxEntries: 50, maxAgeSeconds: 3600 },
             },
           },
         ],
