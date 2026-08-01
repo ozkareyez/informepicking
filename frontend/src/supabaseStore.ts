@@ -53,6 +53,64 @@ function mapDespacho(row: any): Despacho {
   };
 }
 
+interface PedidoItem {
+  id: number;
+  order_id: number;
+  date: string;
+  operator: string;
+  type: string;
+  cliente: string;
+  sku: string;
+  kg: number;
+  kg_per_hour: number | null;
+  efficiency: number | null;
+  time_spent: string | null;
+  novedad: boolean;
+}
+
+// Regla de negocio: cada despacho (vehículo/PLC/placa) es un pedido.
+// Una orden completada sin despacho cuenta como 1 pedido.
+function expandPedidos(orders: Order[], despachosByOrder: Map<number, Despacho[]>): PedidoItem[] {
+  const pedidos: PedidoItem[] = [];
+  for (const o of orders) {
+    const ds = despachosByOrder.get(o.id) || [];
+    if (ds.length === 0) {
+      pedidos.push({
+        id: o.id,
+        order_id: o.id,
+        date: o.date,
+        operator: o.operator,
+        type: o.type,
+        cliente: o.cliente,
+        sku: o.sku,
+        kg: o.kg,
+        kg_per_hour: o.kg_per_hour,
+        efficiency: o.efficiency,
+        time_spent: o.time_spent,
+        novedad: false,
+      });
+    } else {
+      for (const d of ds) {
+        pedidos.push({
+          id: d.id,
+          order_id: o.id,
+          date: o.date,
+          operator: o.operator,
+          type: o.type,
+          cliente: o.cliente,
+          sku: o.sku,
+          kg: d.kg,
+          kg_per_hour: o.kg_per_hour,
+          efficiency: o.efficiency,
+          time_spent: o.time_spent,
+          novedad: d.novedad,
+        });
+      }
+    }
+  }
+  return pedidos;
+}
+
 export async function getOrders(params: {
   cliente?: string;
   date?: string;
@@ -248,53 +306,68 @@ export async function getDashboard(params: { period?: string; date?: string } = 
   orderQuery = applyDateFilter(orderQuery, params.period, params.date);
   const { data: orderData, error: orderError } = await orderQuery;
   if (orderError) throw new Error(orderError.message);
-  const completed = (orderData || []).map(mapOrder);
+  const orders = (orderData || []).map(mapOrder);
 
-  let despQuery = getSupabase().from('despachos').select('*');
-  if (params.period && params.date) {
-    const { start, end } = getDateRange(params.period, params.date);
-    despQuery = despQuery.gte('created_at', start).lt('created_at', end);
+  // Cada despacho (vehículo) es un pedido: consultar despachos de las órdenes del período
+  const orderIds = orders.map(o => o.id);
+  let despachos: Despacho[] = [];
+  if (orderIds.length > 0) {
+    const { data: despData, error: despError } = await getSupabase().from('despachos').select('*').in('order_id', orderIds);
+    if (despError) throw new Error(despError.message);
+    despachos = (despData || []).map(mapDespacho);
   }
-  const { data: despData } = await despQuery;
-  const despachos = (despData || []).map(mapDespacho);
 
   let uncQuery = getSupabase().from('unloadings').select('*');
   uncQuery = applyDateFilter(uncQuery, params.period, params.date);
   const { data: uncData } = await uncQuery;
   const unloadings = (uncData || []).map(mapUnloading);
 
-  const totalOrders = completed.length;
-  const totalKg = completed.reduce((s, o) => s + o.kg, 0);
-  const avgKgPerHour = totalOrders > 0 ? completed.reduce((s, o) => s + (o.kg_per_hour ?? 0), 0) / totalOrders : 0;
-  const avgEfficiency = totalOrders > 0 ? completed.reduce((s, o) => s + (o.efficiency ?? 0), 0) / totalOrders : 0;
-  const totalHours = completed.reduce((s, o) => {
+  // Pedidos a nivel despacho: 1 por cada vehículo + 1 por orden completada sin despacho
+  const despachosByOrder = new Map<number, Despacho[]>();
+  for (const d of despachos) {
+    if (!despachosByOrder.has(d.order_id)) despachosByOrder.set(d.order_id, []);
+    despachosByOrder.get(d.order_id)!.push(d);
+  }
+  const pedidos = expandPedidos(orders, despachosByOrder);
+
+  const totalOrders = pedidos.length;
+  const totalKg = pedidos.reduce((s, p) => s + p.kg, 0);
+  // Métricas de producción (kg/h, eficiencia, horas) se promedian por orden, no por vehículo
+  const totalOrdersProd = orders.length;
+  const avgKgPerHour = totalOrdersProd > 0 ? orders.reduce((s, o) => s + (o.kg_per_hour ?? 0), 0) / totalOrdersProd : 0;
+  const avgEfficiency = totalOrdersProd > 0 ? orders.reduce((s, o) => s + (o.efficiency ?? 0), 0) / totalOrdersProd : 0;
+  const totalHours = orders.reduce((s, o) => {
     const m = o.time_spent?.match(/(\d+)h\s*(\d+)m/);
     return m ? s + parseInt(m[1]) + parseInt(m[2]) / 60 : s;
   }, 0);
 
-  // Build set of order_ids that have despachos with novedades
-  const ordersConNovedad = new Set<number>();
-  for (const d of despachos) {
-    if (d.novedad) ordersConNovedad.add(d.order_id);
+  const opMap = new Map<string, { total_kg: number; total_orders: number; orders_prod: number; sum_kgph: number; sum_eff: number; orders_con_novedad: number }>();
+  const dayMap = new Map<string, { total_kg: number; total_orders: number; orders_prod: number; sum_eff: number }>();
+  const typeMap = new Map<string, { total_kg: number; total_orders: number; orders_prod: number; sum_eff: number }>();
+
+  // Conteo de pedidos (despachos) y kg por operario/día/tipo
+  for (const p of pedidos) {
+    let op = opMap.get(p.operator);
+    if (!op) { op = { total_kg: 0, total_orders: 0, orders_prod: 0, sum_kgph: 0, sum_eff: 0, orders_con_novedad: 0 }; opMap.set(p.operator, op); }
+    op.total_kg += p.kg; op.total_orders++; if (p.novedad) op.orders_con_novedad++;
+
+    let d = dayMap.get(p.date);
+    if (!d) { d = { total_kg: 0, total_orders: 0, orders_prod: 0, sum_eff: 0 }; dayMap.set(p.date, d); }
+    d.total_kg += p.kg; d.total_orders++;
+
+    let t = typeMap.get(p.type);
+    if (!t) { t = { total_kg: 0, total_orders: 0, orders_prod: 0, sum_eff: 0 }; typeMap.set(p.type, t); }
+    t.total_kg += p.kg; t.total_orders++;
   }
 
-  const opMap = new Map<string, { total_kg: number; total_orders: number; sum_kgph: number; sum_eff: number; orders_con_novedad: number }>();
-  const dayMap = new Map<string, { total_kg: number; total_orders: number; sum_eff: number }>();
-  const typeMap = new Map<string, { total_kg: number; total_orders: number; sum_eff: number }>();
-
-  for (const o of completed) {
-    let op = opMap.get(o.operator);
-    if (!op) { op = { total_kg: 0, total_orders: 0, sum_kgph: 0, sum_eff: 0, orders_con_novedad: 0 }; opMap.set(o.operator, op); }
-    op.total_kg += o.kg; op.total_orders++; op.sum_kgph += o.kg_per_hour ?? 0; op.sum_eff += o.efficiency ?? 0;
-    if (ordersConNovedad.has(o.id)) op.orders_con_novedad++;
-
-    let d = dayMap.get(o.date);
-    if (!d) { d = { total_kg: 0, total_orders: 0, sum_eff: 0 }; dayMap.set(o.date, d); }
-    d.total_kg += o.kg; d.total_orders++; d.sum_eff += o.efficiency ?? 0;
-
-    let t = typeMap.get(o.type);
-    if (!t) { t = { total_kg: 0, total_orders: 0, sum_eff: 0 }; typeMap.set(o.type, t); }
-    t.total_kg += o.kg; t.total_orders++; t.sum_eff += o.efficiency ?? 0;
+  // Métricas de producción (kg/h, eficiencia) a nivel de orden
+  for (const o of orders) {
+    const op = opMap.get(o.operator);
+    if (op) { op.orders_prod++; op.sum_kgph += o.kg_per_hour ?? 0; op.sum_eff += o.efficiency ?? 0; }
+    const d = dayMap.get(o.date);
+    if (d) { d.orders_prod++; d.sum_eff += o.efficiency ?? 0; }
+    const t = typeMap.get(o.type);
+    if (t) { t.orders_prod++; t.sum_eff += o.efficiency ?? 0; }
   }
 
   const despKg = despachos.reduce((s, d) => s + d.kg, 0);
@@ -315,18 +388,18 @@ export async function getDashboard(params: { period?: string; date?: string } = 
     avg_kg_per_hour: avgKgPerHour, avg_efficiency: avgEfficiency, total_hours: totalHours,
     kgByOperator: Array.from(opMap.entries()).map(([operator, d]) => ({
       operator, total_kg: d.total_kg, total_orders: d.total_orders,
-      avg_kg_per_hour: d.total_orders > 0 ? Math.round((d.sum_kgph / d.total_orders) * 100) / 100 : 0,
-      avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+      avg_kg_per_hour: d.orders_prod > 0 ? Math.round((d.sum_kgph / d.orders_prod) * 100) / 100 : 0,
+      avg_efficiency: d.orders_prod > 0 ? Math.round((d.sum_eff / d.orders_prod) * 100) / 100 : 0,
       orders_con_novedad: d.orders_con_novedad,
       pct_novedad: d.total_orders > 0 ? Math.round((d.orders_con_novedad / d.total_orders) * 10000) / 100 : 0,
     })).sort((a, b) => b.total_kg - a.total_kg),
     productionByDay: Array.from(dayMap.entries()).map(([date, d]) => ({
       date, total_kg: d.total_kg, total_orders: d.total_orders,
-      avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+      avg_efficiency: d.orders_prod > 0 ? Math.round((d.sum_eff / d.orders_prod) * 100) / 100 : 0,
     })).sort((a, b) => a.date.localeCompare(b.date)),
     productionByType: Array.from(typeMap.entries()).map(([type, d]) => ({
       type, total_kg: d.total_kg, total_orders: d.total_orders,
-      avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+      avg_efficiency: d.orders_prod > 0 ? Math.round((d.sum_eff / d.orders_prod) * 100) / 100 : 0,
     })),
     despachos: {
       total_kg: despKg, total_vehiculos: despVehiculos, total_rutas: despRutas,
@@ -358,20 +431,26 @@ export async function getFourWeekTrend(): Promise<{
 
   const { data: ordersData, error: ordersError } = await getSupabase()
     .from('orders')
-    .select('date, kg, kg_per_hour, efficiency, status, despachado_kg, created_at')
+    .select('*')
     .in('status', ['completed', 'despachado'])
     .gte('date', startDateStr)
     .order('date', { ascending: true });
   
   if (ordersError) throw new Error(ordersError.message);
+  const trendOrders = (ordersData || []).map(mapOrder);
 
-  const { data: despachosData, error: despError } = await getSupabase()
-    .from('despachos')
-    .select('kg, created_at, cargue_time, orders:order_id(type)')
-    .gte('created_at', startDateStr)
-    .order('created_at', { ascending: true });
-  
-  if (despError) throw new Error(despError.message);
+  const orderIds = trendOrders.map(o => o.id);
+  let despachosData: any[] = [];
+  if (orderIds.length > 0) {
+    const { data: despData, error: despError } = await getSupabase()
+      .from('despachos')
+      .select('*')
+      .in('order_id', orderIds)
+      .order('created_at', { ascending: true });
+    if (despError) throw new Error(despError.message);
+    despachosData = despData || [];
+  }
+  const trendDespachos = despachosData.map(mapDespacho);
 
   const { data: unloadingsData, error: uncError } = await getSupabase()
     .from('unloadings')
@@ -403,13 +482,28 @@ export async function getFourWeekTrend(): Promise<{
     return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
   };
 
-  // Production by ISO week
-  const prodByWeek = new Map<number, { kg: number; orders: number; sumEff: number }>();
-  for (const o of ordersData || []) {
-    const weekNum = getISOWeek(o.date);
-    let acc = prodByWeek.get(weekNum) || { kg: 0, orders: 0, sumEff: 0 };
-    acc.kg += o.kg;
+  // Production by ISO week (pedidos a nivel despacho)
+  const despachosByOrder = new Map<number, Despacho[]>();
+  for (const d of trendDespachos) {
+    if (!despachosByOrder.has(d.order_id)) despachosByOrder.set(d.order_id, []);
+    despachosByOrder.get(d.order_id)!.push(d);
+  }
+  const pedidos = expandPedidos(trendOrders, despachosByOrder);
+
+  const prodByWeek = new Map<number, { kg: number; orders: number; orders_prod: number; sumEff: number }>();
+  for (const p of pedidos) {
+    const weekNum = getISOWeek(p.date);
+    let acc = prodByWeek.get(weekNum) || { kg: 0, orders: 0, orders_prod: 0, sumEff: 0 };
+    acc.kg += p.kg;
     acc.orders++;
+    prodByWeek.set(weekNum, acc);
+  }
+  // Eficiencia (producción) se suma a nivel de orden
+  for (const o of trendOrders) {
+    const weekNum = getISOWeek(o.date);
+    let acc = prodByWeek.get(weekNum);
+    if (!acc) { acc = { kg: 0, orders: 0, orders_prod: 0, sumEff: 0 }; prodByWeek.set(weekNum, acc); }
+    acc.orders_prod++;
     acc.sumEff += o.efficiency ?? 0;
     prodByWeek.set(weekNum, acc);
   }
@@ -420,17 +514,17 @@ export async function getFourWeekTrend(): Promise<{
       week: `Sem ${weekNum}`,
       total_kg: d.kg,
       total_orders: d.orders,
-      avg_efficiency: d.orders ? Math.round((d.sumEff / d.orders) * 100) / 100 : 0
+      avg_efficiency: d.orders_prod ? Math.round((d.sumEff / d.orders_prod) * 100) / 100 : 0
     }));
 
   // Despachos by ISO week
   const despByWeek = new Map<number, { kg: number; vehiculos: number; sumEff: number }>();
-  for (const d of despachosData || []) {
+  for (const d of trendDespachos) {
     const dateStr = d.created_at?.slice(0, 10);
     if (!dateStr) continue;
     const weekNum = getISOWeek(dateStr);
     let acc = despByWeek.get(weekNum) || { kg: 0, vehiculos: 0, sumEff: 0 };
-    acc.kg += Number(d.kg);
+    acc.kg += d.kg;
     acc.vehiculos++;
     const [sh, sm] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
     const [eh, em] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
@@ -505,18 +599,20 @@ export async function getTypeBasedWeeklyKPIs(): Promise<{
 }> {
   const { data: ordersData, error: ordersError } = await getSupabase()
     .from('orders')
-    .select('date, kg, type, sku, efficiency, status, despachado_kg, created_at')
+    .select('*')
     .in('status', ['completed', 'despachado'])
     .order('date', { ascending: true });
   
   if (ordersError) throw new Error(ordersError.message);
+  const kpiOrders = (ordersData || []).map(mapOrder);
 
   const { data: despachosData, error: despError } = await getSupabase()
     .from('despachos')
-    .select('kg, created_at, cargue_time, orders:order_id(type)')
+    .select('*')
     .order('created_at', { ascending: true });
   
   if (despError) throw new Error(despError.message);
+  const kpiDespachos = (despachosData || []).map(mapDespacho);
 
   // Generate last 4 weeks labels
   const weeks: { label: string; start: string; end: string }[] = [];
@@ -541,19 +637,34 @@ export async function getTypeBasedWeeklyKPIs(): Promise<{
     return null;
   };
 
-  // Production by type and week
-  const prodByTypeWeek = new Map<string, Map<string, { orders: number; kg: number; skus: Set<string>; sumEff: number }>>();
-  for (const o of ordersData || []) {
-    const w = mapToWeek(o.date);
+  // Production by type and week (pedidos a nivel despacho)
+  const despachosByOrder = new Map<number, Despacho[]>();
+  for (const d of kpiDespachos) {
+    if (!despachosByOrder.has(d.order_id)) despachosByOrder.set(d.order_id, []);
+    despachosByOrder.get(d.order_id)!.push(d);
+  }
+  const pedidos = expandPedidos(kpiOrders, despachosByOrder);
+
+  const prodByTypeWeek = new Map<string, Map<string, { orders: number; kg: number; skus: Set<string>; orders_prod: number; sumEff: number }>>();
+  for (const p of pedidos) {
+    const w = mapToWeek(p.date);
     if (!w) continue;
     if (!prodByTypeWeek.has(w)) prodByTypeWeek.set(w, new Map());
     const typeMap = prodByTypeWeek.get(w)!;
-    let acc = typeMap.get(o.type) || { orders: 0, kg: 0, skus: new Set(), sumEff: 0 };
+    let acc = typeMap.get(p.type) || { orders: 0, kg: 0, skus: new Set(), orders_prod: 0, sumEff: 0 };
     acc.orders++;
-    acc.kg += o.kg;
-    acc.skus.add(o.sku);
-    acc.sumEff += o.efficiency ?? 0;
-    typeMap.set(o.type, acc);
+    acc.kg += p.kg;
+    acc.skus.add(p.sku);
+    typeMap.set(p.type, acc);
+  }
+  // Eficiencia (producción) se suma a nivel de orden
+  for (const o of kpiOrders) {
+    const w = mapToWeek(o.date);
+    if (!w) continue;
+    const typeMap = prodByTypeWeek.get(w);
+    if (!typeMap) continue;
+    const acc = typeMap.get(o.type);
+    if (acc) { acc.orders_prod++; acc.sumEff += o.efficiency ?? 0; }
   }
 
   const production = weeks.flatMap(w => {
@@ -564,21 +675,24 @@ export async function getTypeBasedWeeklyKPIs(): Promise<{
       orders: d.orders,
       kg: d.kg,
       skus: d.skus.size,
-      avg_efficiency: d.orders ? Math.round((d.sumEff / d.orders) * 100) / 100 : 0
+      avg_efficiency: d.orders_prod ? Math.round((d.sumEff / d.orders_prod) * 100) / 100 : 0
     }));
   });
 
   // Despachos by type and week
+  const orderTypeMap = new Map<number, string>();
+  for (const o of kpiOrders) orderTypeMap.set(o.id, o.type);
+
   const despByTypeWeek = new Map<string, Map<string, { kg: number; vehiculos: number; sumEff: number }>>();
-  for (const d of despachosData || []) {
+  for (const d of kpiDespachos) {
     const dateStr = d.created_at?.slice(0, 10);
     const w = dateStr ? mapToWeek(dateStr) : null;
     if (!w) continue;
-    const orderType = d.orders?.[0]?.type || 'Masivo';
+    const orderType = orderTypeMap.get(d.order_id) || 'Masivo';
     if (!despByTypeWeek.has(w)) despByTypeWeek.set(w, new Map());
     const typeMap = despByTypeWeek.get(w)!;
     let acc = typeMap.get(orderType) || { kg: 0, vehiculos: 0, sumEff: 0 };
-    acc.kg += Number(d.kg);
+    acc.kg += d.kg;
     acc.vehiculos++;
     const [sh, sm] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
     const [eh, em] = d.cargue_time?.split(':').map(Number) ?? [0, 0];
@@ -632,11 +746,33 @@ export async function getStatistics(params: { operator?: string; period?: string
   if (error) throw new Error(error.message);
   const orders = (data || []).map(mapOrder);
 
-  const opMap = new Map<string, { total_orders: number; total_kg: number; total_hours: number; sum_kgph: number; sum_eff: number }>();
+  // Pedidos a nivel despacho: 1 por cada vehículo + 1 por orden completada sin despacho
+  const orderIds = orders.map(o => o.id);
+  let despachos: Despacho[] = [];
+  if (orderIds.length > 0) {
+    const { data: despData, error: despError } = await getSupabase().from('despachos').select('*').in('order_id', orderIds);
+    if (despError) throw new Error(despError.message);
+    despachos = (despData || []).map(mapDespacho);
+  }
+  const despachosByOrder = new Map<number, Despacho[]>();
+  for (const d of despachos) {
+    if (!despachosByOrder.has(d.order_id)) despachosByOrder.set(d.order_id, []);
+    despachosByOrder.get(d.order_id)!.push(d);
+  }
+  const pedidos = expandPedidos(orders, despachosByOrder);
+
+  const opMap = new Map<string, { total_orders: number; total_kg: number; orders_prod: number; total_hours: number; sum_kgph: number; sum_eff: number }>();
+  // Conteo de pedidos (despachos) y kg por operario
+  for (const p of pedidos) {
+    let op = opMap.get(p.operator);
+    if (!op) { op = { total_orders: 0, total_kg: 0, orders_prod: 0, total_hours: 0, sum_kgph: 0, sum_eff: 0 }; opMap.set(p.operator, op); }
+    op.total_orders++; op.total_kg += p.kg;
+  }
+  // Métricas de producción (horas, kg/h, eficiencia) a nivel de orden
   for (const o of orders) {
-    let op = opMap.get(o.operator);
-    if (!op) { op = { total_orders: 0, total_kg: 0, total_hours: 0, sum_kgph: 0, sum_eff: 0 }; opMap.set(o.operator, op); }
-    op.total_orders++; op.total_kg += o.kg;
+    const op = opMap.get(o.operator);
+    if (!op) continue;
+    op.orders_prod++;
     const m = o.time_spent?.match(/(\d+)h\s*(\d+)m/);
     if (m) op.total_hours += parseInt(m[1]) + parseInt(m[2]) / 60;
     op.sum_kgph += o.kg_per_hour ?? 0; op.sum_eff += o.efficiency ?? 0;
@@ -644,12 +780,12 @@ export async function getStatistics(params: { operator?: string; period?: string
 
   const stats = Array.from(opMap.entries()).map(([operator, d]) => ({
     operator, total_orders: d.total_orders, total_kg: d.total_kg, total_hours: Math.round(d.total_hours * 100) / 100,
-    avg_kg_per_hour: d.total_orders > 0 ? Math.round((d.sum_kgph / d.total_orders) * 100) / 100 : 0,
-    avg_efficiency: d.total_orders > 0 ? Math.round((d.sum_eff / d.total_orders) * 100) / 100 : 0,
+    avg_kg_per_hour: d.orders_prod > 0 ? Math.round((d.sum_kgph / d.orders_prod) * 100) / 100 : 0,
+    avg_efficiency: d.orders_prod > 0 ? Math.round((d.sum_eff / d.orders_prod) * 100) / 100 : 0,
   })).sort((a, b) => b.total_kg - a.total_kg);
 
   const dayKg = new Map<string, number>();
-  for (const o of orders) dayKg.set(o.date, (dayKg.get(o.date) || 0) + o.kg);
+  for (const p of pedidos) dayKg.set(p.date, (dayKg.get(p.date) || 0) + p.kg);
   let bestDay: { date: string; total_kg: number } | null = null;
   for (const [date, kg] of dayKg) if (!bestDay || kg > bestDay.total_kg) bestDay = { date, total_kg: kg };
 

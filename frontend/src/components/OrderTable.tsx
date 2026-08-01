@@ -206,6 +206,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     } catch {}
 
     const registros: any[] = [];
+    // Cada despacho (vehículo) es un pedido; pedidos completados sin despacho cuentan 1.
+    const pedidoItems: { kg: number; operator: string; type: string }[] = [];
     for (const o of orders) {
       const despachos = despachoRows[o.id] || [];
       const kgph = o.kg_per_hour ?? calculateKgPerHour(o.kg, parseHours(o.time_spent));
@@ -233,6 +235,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
           'Estado final': o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : '',
           'Días retraso': diasRetraso,
         });
+        pedidoItems.push({ kg: o.kg, operator: o.operator || 'Sin asignar', type: o.type });
       } else {
         for (const d of despachos) {
           registros.push({
@@ -242,7 +245,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
             PLC: d.plc?.toUpperCase() || '',
             Placa: d.placa?.toUpperCase() || '',
             SKU: o.sku.toUpperCase(),
-            Kg: o.kg,
+            Kg: d.kg,
             Operario: o.operator.toUpperCase(),
             Eficiencia: eficiencia,
             'Tiempo alistamiento': o.time_spent ?? '',
@@ -256,6 +259,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
             'Novedad cargue': d.novedad ? 'Sí' : 'No',
             'Cantidad referencias novedad': d.novedad ? d.cantidad_referencias_novedad : 0,
           });
+          pedidoItems.push({ kg: d.kg, operator: o.operator || 'Sin asignar', type: o.type });
         }
       }
     }
@@ -366,21 +370,21 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     } catch {}
 
     // ─── Sheet 6: Resumen ───
-    const totalOrders = orders.length;
-    const totalKg = orders.reduce((s, o) => s + o.kg, 0);
+    const totalOrders = pedidoItems.length;
+    const totalKg = pedidoItems.reduce((s, p) => s + p.kg, 0);
     const completed = orders.filter(o => o.status === 'completed' || o.status === 'despachado');
     const avgEff = completed.length > 0 ? completed.reduce((s, o) => s + (o.efficiency ?? 0), 0) / completed.length : 0;
     const avgKgph = completed.length > 0 ? completed.reduce((s, o) => s + (o.kg_per_hour ?? 0), 0) / completed.length : 0;
     let totalHours = 0;
     for (const o of completed) totalHours += parseHours(o.time_spent);
 
-    const opMap = new Map<string, { kg: number; count: number; sumEff: number }>();
+    const opMap = new Map<string, { kg: number; count: number }>();
     const tpMap = new Map<string, { kg: number; count: number }>();
-    for (const o of orders) {
-      const op = opMap.get(o.operator || 'Sin asignar') ?? { kg: 0, count: 0, sumEff: 0 };
-      op.kg += o.kg; op.count++; op.sumEff += o.efficiency ?? 0; opMap.set(o.operator || 'Sin asignar', op);
-      const tp = tpMap.get(o.type) ?? { kg: 0, count: 0 };
-      tp.kg += o.kg; tp.count++; tpMap.set(o.type, tp);
+    for (const p of pedidoItems) {
+      const op = opMap.get(p.operator) ?? { kg: 0, count: 0 };
+      op.kg += p.kg; op.count++; opMap.set(p.operator, op);
+      const tp = tpMap.get(p.type) ?? { kg: 0, count: 0 };
+      tp.kg += p.kg; tp.count++; tpMap.set(p.type, tp);
     }
 
     const summary = [
@@ -393,7 +397,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       { Indicador: 'Producción por operario', Valor: '' },
       ...Array.from(opMap.entries()).map(([op, d]) => ({
         Indicador: op,
-        Valor: `${d.kg} kg (${d.count} pedidos) · Efic: ${(d.sumEff / d.count).toFixed(2)}%`,
+        Valor: `${d.kg} kg (${d.count} pedidos)`,
       })),
       { Indicador: '', Valor: '' },
       { Indicador: 'Producción por tipo', Valor: '' },
