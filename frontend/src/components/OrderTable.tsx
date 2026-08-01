@@ -206,7 +206,8 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     } catch {}
 
     const registros: any[] = [];
-    // Cada despacho (vehículo) es un pedido; pedidos completados sin despacho cuentan 1.
+    // Cada despacho (vehículo) es un pedido; pedidos completados sin despacho cuentan 1
+    // pero no aportan kg (kg procesados = kg despachados).
     const pedidoItems: { kg: number; operator: string; type: string }[] = [];
     for (const o of orders) {
       const despachos = despachoRows[o.id] || [];
@@ -216,6 +217,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
 
       const semana = getWeekNumber(o.date);
       if (despachos.length === 0) {
+        // Pedido completado sin despacho: cuenta como 1 pedido pero sin kg (kg = despachados)
         registros.push({
           Semana: semana,
           Fecha: o.date,
@@ -223,19 +225,19 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
           PLC: '',
           Placa: '',
           SKU: o.sku.toUpperCase(),
-          Kg: o.kg,
+          Kg: 0,
           Operario: o.operator.toUpperCase(),
           Eficiencia: eficiencia,
           'Tiempo alistamiento': o.time_spent ?? '',
           'Fecha despacho': '',
           'Tiempo cargue': '',
-          'Kg despachados': o.despachado_kg,
+          'Kg despachados': 0,
           'Devolución kg': o.devolucion_kg ?? 0,
           'Devolución a bodega': o.notas_devolucion || (o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : ''),
           'Estado final': o.devolucion_kg > 0 ? `Devolución ${o.devolucion_kg} kg` : '',
           'Días retraso': diasRetraso,
         });
-        pedidoItems.push({ kg: o.kg, operator: o.operator || 'Sin asignar', type: o.type });
+        pedidoItems.push({ kg: 0, operator: o.operator || 'Sin asignar', type: o.type });
       } else {
         for (const d of despachos) {
           registros.push({

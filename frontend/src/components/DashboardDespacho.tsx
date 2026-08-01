@@ -295,9 +295,9 @@ export default function DashboardDespacho() {
             </div>
           </div>
           <div className="h-2 bg-blue-200/50 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.min(100, (data.despachos.total_kg / (data.total_kg || 1)) * 100)}%` }} />
+            <div className="h-full bg-blue-600 rounded-full" style={{ width: `${Math.min(100, (data.despachos.total_vehiculos / (data.total_orders || 1)) * 100)}%` }} />
           </div>
-          <p className="text-xs text-blue-500 mt-1.5">{((data.despachos.total_kg / (data.total_kg || 1)) * 100).toFixed(1)}% del total producido</p>
+          <p className="text-xs text-blue-500 mt-1.5">{data.despachos.total_vehiculos} de {data.total_orders} pedidos despachados</p>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">

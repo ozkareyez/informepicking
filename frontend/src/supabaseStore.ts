@@ -69,7 +69,8 @@ interface PedidoItem {
 }
 
 // Regla de negocio: cada despacho (vehículo/PLC/placa) es un pedido.
-// Una orden completada sin despacho cuenta como 1 pedido.
+// Una orden completada sin despacho cuenta como 1 pedido pero no aporta kg
+// (kg procesados = kg despachados).
 function expandPedidos(orders: Order[], despachosByOrder: Map<number, Despacho[]>): PedidoItem[] {
   const pedidos: PedidoItem[] = [];
   for (const o of orders) {
@@ -83,7 +84,7 @@ function expandPedidos(orders: Order[], despachosByOrder: Map<number, Despacho[]
         type: o.type,
         cliente: o.cliente,
         sku: o.sku,
-        kg: o.kg,
+        kg: 0,
         kg_per_hour: o.kg_per_hour,
         efficiency: o.efficiency,
         time_spent: o.time_spent,
