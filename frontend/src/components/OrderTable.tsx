@@ -225,6 +225,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
           PLC: '',
           Placa: '',
           SKU: o.sku.toUpperCase(),
+          Tipo: o.type,
           Kg: 0,
           Operario: o.operator.toUpperCase(),
           Eficiencia: eficiencia,
@@ -247,6 +248,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
             PLC: d.plc?.toUpperCase() || '',
             Placa: d.placa?.toUpperCase() || '',
             SKU: o.sku.toUpperCase(),
+            Tipo: o.type,
             Kg: d.kg,
             Operario: o.operator.toUpperCase(),
             Eficiencia: eficiencia,
@@ -269,7 +271,7 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
     const wsReg = XLSX.utils.json_to_sheet(registros);
     wsReg['!cols'] = [
       { wch: 8 }, { wch: 12 }, { wch: 22 }, { wch: 18 }, { wch: 14 },
-      { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 10 },
+      { wch: 14 }, { wch: 14 }, { wch: 10 }, { wch: 18 }, { wch: 10 },
       { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
       { wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 22 }, { wch: 14 }, { wch: 20 },
     ];
@@ -396,14 +398,16 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
       { Indicador: 'Promedio de kg/h', Valor: avgKgph > 0 ? avgKgph.toFixed(2) : 'N/A' },
       { Indicador: 'Total de horas', Valor: totalHours.toFixed(2) },
       { Indicador: '', Valor: '' },
+      { Indicador: 'Resumen por tipo', Valor: '' },
+      ...Array.from(tpMap.entries()).map(([tp, d]) => ({
+        Indicador: tp,
+        Valor: `${d.count} pedidos - ${d.kg} kg`,
+      })),
       { Indicador: 'Producción por operario', Valor: '' },
       ...Array.from(opMap.entries()).map(([op, d]) => ({
         Indicador: op,
         Valor: `${d.kg} kg (${d.count} pedidos)`,
       })),
-      { Indicador: '', Valor: '' },
-      { Indicador: 'Producción por tipo', Valor: '' },
-      ...Array.from(tpMap.entries()).map(([tp, d]) => ({ Indicador: tp, Valor: `${d.kg} kg (${d.count} pedidos)` })),
     ];
     const wsSummary = XLSX.utils.json_to_sheet(summary);
     applyHeaderStyle(wsSummary);
