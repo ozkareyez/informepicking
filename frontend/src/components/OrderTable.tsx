@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Search, ArrowUpDown, Edit, Trash2, FileSpreadsheet, ChevronLeft, ChevronRight, Trash, User, Truck, Download, ChevronDown, ChevronUp, Package, PackageSearch, CalendarDays, AlertTriangle } from 'lucide-react';
 import { getOrders, deleteOrder, clearAllData, deleteOrdersByDateRange, getAllDespachos, getUnloadings, getCitasCargue, deleteDespacho, deleteUnloading, deleteCitaCargue, getMovements } from '../api';
 import type { Order, Despacho, Unloading, CitaCargue } from '../types';
-import { calculateKgPerHour, calculateEfficiency, getOverdueDays, getWeekNumber, toUpperCase } from '../utils';
+import { calculateKgPerHour, calculateEfficiency, getOverdueDays, getWeekNumber, getWeekRange, toUpperCase } from '../utils';
 import * as XLSX from 'xlsx';
 import PasswordModal from './PasswordModal';
 
@@ -448,15 +448,9 @@ export default function OrderTable({ refreshTrigger, onEdit, onDelete }: Props) 
   function handleWeekChange(week: string) {
     setDeleteWeek(week);
     if (!week) return;
-    const year = new Date().getFullYear();
-    const firstJan = new Date(year, 0, 1);
-    const days = (parseInt(week) - 1) * 7;
-    const start = new Date(firstJan);
-    start.setDate(firstJan.getDate() + days - firstJan.getDay() + 1);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    setDeleteStartDate(start.toISOString().split('T')[0]);
-    setDeleteEndDate(end.toISOString().split('T')[0]);
+    const { start, end } = getWeekRange(parseInt(week), new Date().getFullYear());
+    setDeleteStartDate(start);
+    setDeleteEndDate(end);
   }
 
   const filtered = useMemo(() => {

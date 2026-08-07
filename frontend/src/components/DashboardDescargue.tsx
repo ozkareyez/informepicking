@@ -86,12 +86,8 @@ export default function DashboardDescargue() {
   function handleWeekChange(week: string) {
     setWeekInput(week);
     if (!week) return;
-    const year = new Date().getFullYear();
-    const firstJan = new Date(year, 0, 1);
-    const days = (parseInt(week) - 1) * 7;
-    const start = new Date(firstJan);
-    start.setDate(firstJan.getDate() + days - firstJan.getDay() + 1);
-    setDate(start.toISOString().split('T')[0]);
+    const { start } = getWeekRange(parseInt(week), new Date().getFullYear());
+    setDate(start);
   }
 
   if (loading) return (

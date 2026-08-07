@@ -1,5 +1,5 @@
 import type { Order, OrderFormData, RegisterOrderData, DashboardData, StatisticsData, Client, Despacho, Unloading, UnloadingFormData, Operator, CitaCargue, CitaCargueFormData } from './types';
-import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime } from './utils';
+import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueTime, getWeekRangeFromDate } from './utils';
 
 const STORAGE_KEY = 'pedidos_orders';
 const DESPACHOS_KEY = 'pedidos_despachos';
@@ -363,15 +363,8 @@ function filterByDate<T>(items: T[], period: string | undefined, date: string | 
     return items.filter(i => key(i).startsWith(prefix));
   }
   if (period === 'week') {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(d.setDate(diff));
-    const sunday = new Date(monday);
-    sunday.setDate(sunday.getDate() + 6);
-    const mStr = monday.toISOString().split('T')[0];
-    const sStr = sunday.toISOString().split('T')[0];
-    return items.filter(i => key(i) >= mStr && key(i) <= sStr);
+    const { start, end } = getWeekRangeFromDate(date);
+    return items.filter(i => key(i) >= start && key(i) <= end);
   }
   return items;
 }
@@ -461,15 +454,8 @@ export async function getStatistics(params: { operator?: string; period?: string
     } else if (params.period === 'year') {
       orders = orders.filter(o => o.date.startsWith(params.date!.slice(0, 4)));
     } else if (params.period === 'week') {
-      const d = new Date(params.date);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(d.setDate(diff));
-      const sunday = new Date(monday);
-      sunday.setDate(sunday.getDate() + 6);
-      const mStr = monday.toISOString().split('T')[0];
-      const sStr = sunday.toISOString().split('T')[0];
-      orders = orders.filter(o => o.date >= mStr && o.date <= sStr);
+      const { start, end } = getWeekRangeFromDate(params.date);
+      orders = orders.filter(o => o.date >= start && o.date <= end);
     }
   }
 

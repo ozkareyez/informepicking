@@ -181,7 +181,7 @@ if (willDeleteSource) {
     if (!period) return orders;
     if (period === 'day') return orders.filter(o => o.date === date);
     if (period === 'week') {
-      const { start, end } = getWeekRange(parseInt(weekInput), new Date(date).getFullYear());
+      const { start, end } = getWeekRange(parseInt(weekInput), new Date().getFullYear());
       return orders.filter(o => o.date >= start && o.date <= end);
     }
     if (period === 'month') {
@@ -210,15 +210,9 @@ const doneOrders = filteredByDate.filter(o => round2(o.kg - (o.despachado_kg ?? 
   function handleWeekChange(week: string) {
     setDeleteWeek(week);
     if (!week) return;
-    const year = new Date().getFullYear();
-    const firstJan = new Date(year, 0, 1);
-    const days = (parseInt(week) - 1) * 7;
-    const start = new Date(firstJan);
-    start.setDate(firstJan.getDate() + days - firstJan.getDay() + 1);
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
-    setDeleteStartDate(start.toISOString().split('T')[0]);
-    setDeleteEndDate(end.toISOString().split('T')[0]);
+    const { start, end } = getWeekRange(parseInt(week), new Date().getFullYear());
+    setDeleteStartDate(start);
+    setDeleteEndDate(end);
   }
 
   const overdue = pendingOrders.filter(isOverdue);

@@ -4,7 +4,7 @@ import type { Order, RegisterOrderData, OrderFormData, DashboardData, Statistics
 function getCurrentUser(): string {
   return localStorage.getItem('current_user') || '';
 }
-import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueEfficiency, calculateDescargueEfficiency, calculateCargueTime, parseTimeSpentToHours } from './utils';
+import { calculateTimeSpent, calculateHours, calculateKgPerHour, calculateEfficiency, calculateCargueEfficiency, calculateDescargueEfficiency, calculateCargueTime, parseTimeSpentToHours, getWeekRangeFromDate } from './utils';
 
 function mapOrder(row: any): Order {
   return {
@@ -270,15 +270,10 @@ function getDateRange(period: string, date: string): { start: string; end: strin
     return { start: `${prefix}-01`, end: next.toISOString().split('T')[0] };
   }
   if (period === 'week') {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(d.setDate(diff));
-    const sunday = new Date(monday);
-    sunday.setDate(sunday.getDate() + 6);
-    const next = new Date(sunday);
-    next.setDate(next.getDate() + 1);
-    return { start: monday.toISOString().split('T')[0], end: next.toISOString().split('T')[0] };
+    const { start, end } = getWeekRangeFromDate(date);
+    const next = new Date(end + 'T00:00:00Z');
+    next.setUTCDate(next.getUTCDate() + 1);
+    return { start, end: next.toISOString().split('T')[0] };
   }
   return { start: '', end: '' };
 }
@@ -291,13 +286,8 @@ function applyDateFilter(query: any, period: string | undefined, date: string | 
     return query.gte(column, `${prefix}-01`).lte(column, `${prefix}-31`);
   }
   if (period === 'week') {
-    const d = new Date(date);
-    const day = d.getDay();
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(d.setDate(diff));
-    const sunday = new Date(monday);
-    sunday.setDate(sunday.getDate() + 6);
-    return query.gte(column, monday.toISOString().split('T')[0]).lte(column, sunday.toISOString().split('T')[0]);
+    const { start, end } = getWeekRangeFromDate(date);
+    return query.gte(column, start).lte(column, end);
   }
   return query;
 }
@@ -733,13 +723,8 @@ export async function getStatistics(params: { operator?: string; period?: string
       const prefix = params.date.slice(0, 4);
       query = query.gte('date', `${prefix}-01-01`).lte('date', `${prefix}-12-31`);
     } else if (params.period === 'week') {
-      const d = new Date(params.date);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(d.setDate(diff));
-      const sunday = new Date(monday);
-      sunday.setDate(sunday.getDate() + 6);
-      query = query.gte('date', monday.toISOString().split('T')[0]).lte('date', sunday.toISOString().split('T')[0]);
+      const { start, end } = getWeekRangeFromDate(params.date);
+      query = query.gte('date', start).lte('date', end);
     }
   }
 

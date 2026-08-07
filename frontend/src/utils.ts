@@ -63,9 +63,13 @@ export function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+function parseDateUtc(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d));
+}
+
 export function getWeekNumber(dateStr: string): number {
-  const date = new Date(dateStr);
-  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const d = parseDateUtc(dateStr);
   const dayNum = d.getUTCDay() || 7;
   d.setUTCDate(d.getUTCDate() + 4 - dayNum);
   const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
@@ -73,15 +77,29 @@ export function getWeekNumber(dateStr: string): number {
 }
 
 export function getWeekRange(weekNumber: number, year: number): { start: string; end: string } {
-  const firstJan = new Date(year, 0, 1);
-  const days = (weekNumber - 1) * 7;
-  const start = new Date(firstJan);
-  start.setDate(firstJan.getDate() + days - firstJan.getDay() + 1);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const jan4Day = jan4.getUTCDay() || 7;
+  const week1Monday = new Date(Date.UTC(year, 0, 4 - jan4Day + 1));
+  const start = new Date(week1Monday);
+  start.setUTCDate(start.getUTCDate() + (weekNumber - 1) * 7);
   const end = new Date(start);
-  end.setDate(start.getDate() + 6);
+  end.setUTCDate(end.getUTCDate() + 6);
   return {
     start: start.toISOString().split('T')[0],
     end: end.toISOString().split('T')[0],
+  };
+}
+
+export function getWeekRangeFromDate(dateStr: string): { start: string; end: string } {
+  const d = parseDateUtc(dateStr);
+  const dayNum = d.getUTCDay() || 7;
+  const monday = new Date(d);
+  monday.setUTCDate(monday.getUTCDate() - (dayNum - 1));
+  const sunday = new Date(monday);
+  sunday.setUTCDate(sunday.getUTCDate() + 6);
+  return {
+    start: monday.toISOString().split('T')[0],
+    end: sunday.toISOString().split('T')[0],
   };
 }
 
